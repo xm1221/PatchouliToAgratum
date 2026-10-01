@@ -73,6 +73,16 @@ public final class PageRenderContext {
     }
 
     /**
+     * A raw field value, whatever JSON type it happens to be.
+     *
+     * <p>Most fields are strings, but some page types carry structures — Hex Casting's manual
+     * pattern pages hold {@code {startdir, signature, q, r}} objects.</p>
+     */
+    public Object value(String field) {
+        return this.page.get(field);
+    }
+
+    /**
      * A raw field value.
      *
      * @return the value as text, or {@code null} when absent or not a string
@@ -111,6 +121,17 @@ public final class PageRenderContext {
      */
     public String localised(String field) {
         return localise(raw(field));
+    }
+
+    /**
+     * Whether a language key resolves in this book's language table.
+     *
+     * <p>Some page types do not fall back after a miss, they <i>choose between two keys</i> and
+     * have to ask first — Hex Casting names an action one way in the casting UI and another way
+     * in its book, and picks the book name only when that key exists.</p>
+     */
+    public boolean hasLocalisation(String key) {
+        return key != null && !key.isBlank() && this.layout.usesI18n() && this.lang.containsKey(key);
     }
 
     /**

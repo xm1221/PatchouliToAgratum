@@ -1,5 +1,6 @@
 package cn.xm1221.pta;
 
+import cn.xm1221.pta.client.component.MDHexPatternComponent;
 import cn.xm1221.pta.client.component.MDPatchouliPageComponent;
 import dev.anvilcraft.resource.ageratum.client.feat.markdown.MDExtensionComponentFactory;
 import dev.anvilcraft.resource.ageratum.client.registries.AgeratumRegistries;
@@ -26,6 +27,17 @@ public final class PtaComponents {
      */
     public static final DeferredHolder<MDExtensionComponentFactory, MDExtensionComponentFactory> PAGE =
             EXTENSION_COMPONENTS.register("page", () -> MDPatchouliPageComponent::parse);
+
+    /**
+     * Draws one Hex Casting pattern, optionally captioned with its signature.
+     *
+     * <pre>{@code <pta:pattern op="hexcasting:get_caster" io="→ entity | null"/>}</pre>
+     *
+     * <p>Hex Casting's own component draws the hexagon; see
+     * {@link cn.xm1221.pta.client.render.HexPatternBridge}. Installing it is optional.</p>
+     */
+    public static final DeferredHolder<MDExtensionComponentFactory, MDExtensionComponentFactory> PATTERN =
+            EXTENSION_COMPONENTS.register("pattern", () -> MDHexPatternComponent::parse);
 
     private PtaComponents() {
     }
