@@ -38,6 +38,16 @@ public final class HexPatternPageRenderer implements PageRenderer {
             "hexcasting:manual_pattern",
             "hexcasting:manual_pattern_nosig");
 
+    /**
+     * The page types that carry their patterns themselves.
+     *
+     * <p>These are the pages for ops that have no shape to look up — the number pattern, a vector
+     * constant, a mask — which is why the book writes the shapes out instead of naming them.</p>
+     */
+    private static final List<String> MANUAL_TYPES = List.of(
+            "hexcasting:manual_pattern",
+            "hexcasting:manual_pattern_nosig");
+
     /** Where every action's name lives, in both of its spellings. */
     private static final String ACTION_PREFIX = "hexcasting.action.";
 
@@ -101,18 +111,21 @@ public final class HexPatternPageRenderer implements PageRenderer {
     /**
      * The component that draws the hexagon, carrying everything the renderer can resolve offline.
      *
-     * @return the tag, or {@code null} when the page names neither an action nor a pattern
+     * <p>Which half of the page the pattern comes from follows the page type, not the fields: a
+     * manual page draws the patterns it carries, and its {@code op_id} is there only to name the
+     * page. Taking the action instead looks reasonable and draws nothing — the ops whose pages are
+     * manual are exactly the ones with no shape to look up (the number pattern, a vector constant,
+     * a mask), so a lookup yields an empty pattern and the page loses its only picture.</p>
+     *
+     * @return the tag, or {@code null} when the page names no pattern this renderer can resolve
      */
     private static String pattern(PageRenderContext context) {
+        if (MANUAL_TYPES.contains(context.type())) {
+            String patterns = manualPatterns(context);
+            return patterns == null ? null : tag("patterns", patterns, context);
+        }
         String opId = context.raw("op_id");
-        if (opId != null && !opId.isBlank()) {
-            return tag("op", opId.trim(), context);
-        }
-        String patterns = manualPatterns(context);
-        if (patterns != null) {
-            return tag("patterns", patterns, context);
-        }
-        return null;
+        return opId == null || opId.isBlank() ? null : tag("op", opId.trim(), context);
     }
 
     /**

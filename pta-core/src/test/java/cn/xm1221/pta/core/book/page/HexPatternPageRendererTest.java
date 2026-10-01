@@ -209,7 +209,58 @@ class HexPatternPageRendererTest {
         assertTrue(markdown.contains("stroke_order=\"true\""), markdown);
     }
 
-    /** Nothing to draw means nothing to keep: the page goes back to Patchouli. */    @Test
+    /**
+     * A manual page draws the patterns it carries even when it also names an action.
+     *
+     * <p>The action is only the page's name. Hex Casting's manual pages exist for the ops that have
+     * no shape to look up — the number pattern, a vector constant, a mask — so taking the action
+     * instead of the page's own patterns leaves the page with no picture at all.</p>
+     */
+    @Test
+    void aManualPageDrawsItsOwnPatternsRatherThanItsActions() {
+        BookLayout layout = hexmodBook();
+
+        String markdown = PageTypeRegistry.standard().render(new PageRenderContext(
+                layout, layout.entries().get("hexcasting:patterns/numbers"), 0,
+                Map.of("type", "hexcasting:manual_pattern",
+                        "op_id", "hexcasting:number",
+                        "patterns", List.of(
+                                Map.of("startdir", "SOUTH_EAST", "signature", "aqaa"),
+                                Map.of("startdir", "NORTH_EAST", "signature", "dedd", "q", 3)),
+                        "text", "body"),
+                Map.of(), new BookTextConverter(layout, ConversionReport.empty())));
+
+        assertTrue(markdown.contains("patterns=\"SOUTH_EAST:aqaa;NORTH_EAST:dedd@3,0\""), markdown);
+        assertFalse(markdown.contains("<pta:pattern op="), markdown);
+    }
+
+    /** A manual page with nothing to draw is not something to guess at. */
+    @Test
+    void aManualPageWithoutPatternsIsHosted() {
+        BookLayout layout = hexmodBook();
+
+        String markdown = PageTypeRegistry.standard().render(new PageRenderContext(
+                layout, layout.entries().get("hexcasting:patterns/numbers"), 0,
+                Map.of("type", "hexcasting:manual_pattern", "op_id", "hexcasting:number", "text", "body"),
+                Map.of(), new BookTextConverter(layout, ConversionReport.empty())));
+
+        assertTrue(markdown.contains("<pta:page"), markdown);
+    }
+
+    /** The real page for the number pattern, whose two shapes the book writes out itself. */
+    @Test
+    void theNumberPatternPageCarriesBothShapes() throws IOException {
+        BookLayout layout = hexmodBook();
+
+        String markdown = render(layout, hexmodLang(), "hexcasting:patterns/numbers", 0,
+                ConversionReport.empty());
+
+        assertTrue(markdown.contains("patterns=\"SOUTH_EAST:aqaa;NORTH_EAST:dedd@3,0\""), markdown);
+        assertFalse(markdown.contains("<pta:pattern op="), markdown);
+    }
+
+    /** Nothing to draw means nothing to keep: the page goes back to Patchouli. */
+    @Test
     void aPatternPageWithoutAPatternIsHosted() {
         BookLayout layout = hexmodBook();
         ConversionReport report = ConversionReport.empty();
@@ -271,6 +322,13 @@ class HexPatternPageRendererTest {
                 assertTrue(markdown.startsWith("## "), "no heading for " + entry.documentPath()
                         + "#" + index + ": " + markdown);
                 assertTrue(markdown.contains("<pta:pattern "), markdown);
+                if (!"hexcasting:pattern".equals(type)) {
+                    // A manual page draws the shapes it carries, never a lookup of the op it names.
+                    assertTrue(markdown.contains("patterns=\""), "manual page lost its own pattern: "
+                            + entry.documentPath() + "#" + index + ": " + markdown);
+                    assertFalse(markdown.contains("<pta:pattern op="), entry.documentPath()
+                            + "#" + index + " took its action instead of its patterns: " + markdown);
+                }
                 if (markdown.contains("io=\"")) {
                     withSignature++;
                 }
