@@ -175,7 +175,7 @@ public final class PtaGuideDocuments {
      */
     private static void mergeReports(ConversionReport into, ConversionReport from) {
         from.droppedAnchors().forEach((key, count) -> repeat(count, () -> into.anchor(key)));
-        from.unsupportedPageTypes().forEach((key, count) -> repeat(count, () -> into.unsupportedPageType(key)));
+        from.hostedPageTypes().forEach((key, count) -> repeat(count, () -> into.hostedPageType(key)));
         from.unknownCommands().forEach((key, count) -> repeat(count, () -> into.unknownCommand(key)));
         from.unrenderedTextFields().forEach((key, count) -> repeat(count, () -> into.unrenderedText(key)));
         repeat(from.droppedUnderlines(), into::underline);

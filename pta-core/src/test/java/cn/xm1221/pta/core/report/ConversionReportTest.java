@@ -54,14 +54,14 @@ class ConversionReportTest {
         report.document();
         report.underline();
         report.playerName();
-        report.unsupportedPageType("patchouli:multiblock");
+        report.hostedPageType("patchouli:multiblock");
         report.unrenderedText("hexcasting.page.missing");
 
         String markdown = report.toMarkdown();
         assertTrue(markdown.contains("documents written: 2"), markdown);
         assertTrue(markdown.contains("dropped underlines: 1"), markdown);
         assertTrue(markdown.contains("dropped player names: 1"), markdown);
-        assertTrue(markdown.contains("## Unsupported page types"), markdown);
+        assertTrue(markdown.contains("## Page types rendered by Patchouli"), markdown);
         assertTrue(markdown.contains("`patchouli:multiblock` x1"), markdown);
         assertTrue(markdown.contains("## Unresolved text keys"), markdown);
         assertFalse(markdown.contains("Nothing was lost"), markdown);

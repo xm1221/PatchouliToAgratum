@@ -1,9 +1,8 @@
 package cn.xm1221.pta.core.book;
 
+import cn.xm1221.pta.core.book.page.PageRenderContext;
+import cn.xm1221.pta.core.book.page.PageTypeRegistry;
 import cn.xm1221.pta.core.report.ConversionReport;
-import cn.xm1221.pta.core.text.AgeratumTextWriter;
-import cn.xm1221.pta.core.text.MacroExpander;
-import cn.xm1221.pta.core.text.PatchouliTextScanner;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -13,11 +12,13 @@ import java.util.Map;
 /**
  * Turns a book into the Markdown documents Ageratum will read.
  *
- * <p>Each entry becomes one document. Pages become sections within it, except that a text page is
- * converted into real Markdown while every other page type is handed to the {@code <pta:page>}
- * component, which renders the original Patchouli page. That split is the point of the mod: text
- * becomes searchable, selectable and linkable, and everything that draws something is left to
- * Patchouli rather than re-implemented.</p>
+ * <p>Each entry becomes one document, and each Patchouli page becomes a section within it. What a
+ * section looks like is decided by a {@link PageTypeRegistry}: a page type with a renderer is
+ * converted into real Markdown, and anything else is handed to the {@code <pta:page>} component,
+ * which renders the original page with Patchouli's own code.</p>
+ *
+ * <p>That split is the point of the mod. Converted text is searchable, selectable and linkable;
+ * hosted pages are exact but inert. Hosting is the safety net, not the goal.</p>
  */
 public final class BookConverter {
     /**
@@ -43,24 +44,36 @@ public final class BookConverter {
     }
 
     /**
-     * Converts a loaded book.
+     * Converts a loaded book with the standard page renderers.
      *
      * @param layout the book structure
      * @param lang   the flattened language table for the target language
      */
     public static Output convert(BookLayout layout, Map<String, String> lang) {
+        return convert(layout, lang, PageTypeRegistry.standard());
+    }
+
+    /**
+     * Converts a loaded book.
+     *
+     * @param layout    the book structure
+     * @param lang      the flattened language table for the target language
+     * @param pageTypes how each page type is rendered
+     */
+    public static Output convert(BookLayout layout, Map<String, String> lang,
+                                 PageTypeRegistry pageTypes) {
         Map<String, String> documents = new LinkedHashMap<>();
         ConversionReport report = ConversionReport.empty();
-        MacroExpander expander = MacroExpander.of(layout.macros());
+        BookTextConverter texts = new BookTextConverter(layout, report);
 
-        documents.put(ROOT_DOCUMENT, rootDocument(layout, lang, report, expander));
+        documents.put(ROOT_DOCUMENT, rootDocument(layout, lang, texts));
 
         for (BookLayout.Category category : layout.categories().values()) {
-            documents.put(category.indexPath(), categoryDocument(layout, category, lang, report));
+            documents.put(category.indexPath(), categoryDocument(layout, category, lang, texts));
         }
 
         for (BookLayout.Entry entry : layout.entries().values()) {
-            documents.put(entry.documentPath(), entryDocument(layout, entry, lang, report, expander));
+            documents.put(entry.documentPath(), entryDocument(layout, entry, lang, texts, pageTypes));
             report.document();
         }
 
@@ -73,12 +86,12 @@ public final class BookConverter {
      * The book's landing page: its name, its landing text, and links to each root category.
      */
     private static String rootDocument(BookLayout layout, Map<String, String> lang,
-                                       ConversionReport report, MacroExpander expander) {
-        String name = resolve(layout, lang, layout.nameKey(), report);
+                                       BookTextConverter texts) {
+        String name = resolve(layout, lang, layout.nameKey(), texts.report());
         if (name.isBlank()) {
             name = layout.bookName();
         }
-        String landing = resolve(layout, lang, layout.landingTextKey(), report);
+        String landing = resolve(layout, lang, layout.landingTextKey(), texts.report());
 
         StringBuilder out = new StringBuilder();
         out.append(frontMatter(name, null, null, false));
@@ -86,7 +99,7 @@ public final class BookConverter {
 
         if (!landing.isBlank()) {
             out.append('\n')
-                    .append(convertText(layout, expander, ROOT_DOCUMENT, landing, report))
+                    .append(texts.convert(ROOT_DOCUMENT, landing))
                     .append('\n');
         }
 
@@ -95,10 +108,7 @@ public final class BookConverter {
             if (category.parent() != null) {
                 continue;
             }
-            String title = resolve(layout, lang, stringField(category.json(), "name"), report);
-            if (title.isBlank()) {
-                title = category.path();
-            }
+            String title = categoryTitle(layout, category, lang, texts.report());
             contents.append("- [").append(title).append("](")
                     .append(BookLayout.relativize(ROOT_DOCUMENT, category.indexPath()))
                     .append(")\n");
@@ -112,17 +122,17 @@ public final class BookConverter {
     // ------------------------------------------------------------------- categories
 
     private static String categoryDocument(BookLayout layout, BookLayout.Category category,
-                                           Map<String, String> lang, ConversionReport report) {
-        String name = resolve(layout, lang, stringField(category.json(), "name"), report);
-        String description = resolve(layout, lang, stringField(category.json(), "description"), report);
+                                           Map<String, String> lang, BookTextConverter texts) {
+        String name = categoryTitle(layout, category, lang, texts.report());
+        String description = resolve(layout, lang, stringField(category.json(), "description"),
+                texts.report());
 
         StringBuilder out = new StringBuilder();
         out.append(frontMatter(name, category.icon(), null, category.secret()));
         out.append("# ").append(name).append("\n");
         if (!description.isBlank()) {
             out.append('\n')
-                    .append(convertText(layout, MacroExpander.of(layout.macros()),
-                            category.indexPath(), description, report))
+                    .append(texts.convert(category.indexPath(), description))
                     .append('\n');
         }
 
@@ -133,7 +143,7 @@ public final class BookConverter {
             if (!category.id().equals(entry.category())) {
                 continue;
             }
-            String title = resolve(layout, lang, stringField(entry.json(), "name"), report);
+            String title = resolve(layout, lang, stringField(entry.json(), "name"), texts.report());
             if (title.isBlank()) {
                 title = entry.path();
             }
@@ -147,12 +157,18 @@ public final class BookConverter {
         return out.toString();
     }
 
+    private static String categoryTitle(BookLayout layout, BookLayout.Category category,
+                                        Map<String, String> lang, ConversionReport report) {
+        String title = resolve(layout, lang, stringField(category.json(), "name"), report);
+        return title.isBlank() ? category.path() : title;
+    }
+
     // ---------------------------------------------------------------------- entries
 
     private static String entryDocument(BookLayout layout, BookLayout.Entry entry,
-                                        Map<String, String> lang, ConversionReport report,
-                                        MacroExpander expander) {
-        String name = resolve(layout, lang, stringField(entry.json(), "name"), report);
+                                        Map<String, String> lang, BookTextConverter texts,
+                                        PageTypeRegistry pageTypes) {
+        String name = resolve(layout, lang, stringField(entry.json(), "name"), texts.report());
 
         StringBuilder body = new StringBuilder();
         List<Object> pages = entry.pages();
@@ -161,7 +177,7 @@ public final class BookConverter {
             if (pageJson == null) {
                 continue;
             }
-            String section = renderPage(layout, entry, index, pageJson, lang, report, expander);
+            String section = renderPage(layout, entry, index, pageJson, lang, texts, pageTypes);
             if (section.isBlank()) {
                 continue;
             }
@@ -200,94 +216,24 @@ public final class BookConverter {
     }
 
     /**
-     * Renders one page.
+     * Renders one page through the registry.
      *
-     * @return Markdown for the page, possibly empty when the page carries nothing
+     * @return Markdown for the page, possibly empty when it carries nothing
      */
     private static String renderPage(BookLayout layout, BookLayout.Entry entry, int index,
                                      Map<?, ?> pageJson, Map<String, String> lang,
-                                     ConversionReport report, MacroExpander expander) {
-        String type = stringField(pageJson, "type");
-        if (type == null || type.isBlank()) {
-            type = "patchouli:text";
-        }
-        if (!type.contains(":")) {
-            type = "patchouli:" + type;
+                                     BookTextConverter texts, PageTypeRegistry pageTypes) {
+        PageRenderContext context =
+                new PageRenderContext(layout, entry, index, pageJson, lang, texts);
+
+        // Ageratum anchors are heading texts and Patchouli anchors look like hexcasting:get_caster,
+        // so they cannot be preserved as headings yet. Recorded until a marker component exists.
+        String anchor = context.raw("anchor");
+        if (anchor != null && !anchor.isBlank()) {
+            texts.report().anchor(anchor);
         }
 
-        String anchor = stringField(pageJson, "anchor");
-        if (anchor != null) {
-            // Ageratum anchors are heading texts, and Patchouli anchors look like
-            // hexcasting:get_caster, so they cannot be preserved as headings. Recorded until a
-            // dedicated marker component exists.
-            report.anchor(anchor);
-        }
-
-        String title = resolve(layout, lang, stringField(pageJson, "title"), report);
-
-        if (type.equals("patchouli:text") || type.equals("patchouli:link")) {
-            String text = resolve(layout, lang, stringField(pageJson, "text"), report);
-            StringBuilder section = new StringBuilder();
-            if (!title.isBlank()) {
-                section.append("## ").append(title).append("\n\n");
-            }
-            section.append(convertText(layout, expander, entry.documentPath(), text, report));
-
-            String url = stringField(pageJson, "url");
-            if (type.equals("patchouli:link") && url != null) {
-                String linkText = resolve(layout, lang, stringField(pageJson, "link_text"), report);
-                section.append("\n\n[").append(linkText.isBlank() ? url : linkText)
-                        .append("](").append(url).append(')');
-            }
-            return section.toString();
-        }
-
-        // Everything else draws something, so hand the page to Patchouli through the component.
-        report.unsupportedPageType(type);
-        StringBuilder section = new StringBuilder();
-        if (!title.isBlank()) {
-            section.append("## ").append(title).append("\n\n");
-        }
-        section.append("<pta:page book=\"").append(layout.bookId())
-                .append("\" entry=\"").append(entry.path())
-                .append("\" page=\"").append(index).append("\"/>");
-        return section.toString();
-    }
-
-    /**
-     * Converts one run of book text, rewriting its links relative to the document it will live in.
-     *
-     * @param fromDocumentPath the document this text becomes part of, used to relativise links
-     */
-    private static String convertText(BookLayout layout, MacroExpander expander,
-                                      String fromDocumentPath, String text,
-                                      ConversionReport report) {
-        if (text == null || text.isBlank()) {
-            return "";
-        }
-        AgeratumTextWriter.Result result = AgeratumTextWriter.write(
-                PatchouliTextScanner.scan(expander.expand(text).orThrow()),
-                (target, anchor, external) -> {
-                    if (external) {
-                        return target;
-                    }
-                    String resolved = layout.resolveTarget(target);
-                    if (resolved == null) {
-                        return target;
-                    }
-                    if (anchor != null) {
-                        report.anchor(target);
-                    }
-                    return BookLayout.relativize(fromDocumentPath, resolved);
-                });
-        for (int i = 0; i < result.droppedUnderlines(); i++) {
-            report.underline();
-        }
-        for (int i = 0; i < result.droppedPlayerNames(); i++) {
-            report.playerName();
-        }
-        result.unknownCommands().forEach(report::unknownCommand);
-        return result.markdown();
+        return pageTypes.render(context);
     }
 
     // -------------------------------------------------------------------- front matter
@@ -296,8 +242,8 @@ public final class BookConverter {
      * Builds the YAML front matter block.
      *
      * <p>{@code items} is the binding that gives Ageratum's "ponder" behaviour for free, so an
-     * entry whose icon is an item becomes reachable by holding the ponder key over that item —
-     * the closest equivalent Patchouli's entry icon has.</p>
+     * entry whose icon is an item becomes reachable by holding the ponder key over that item — the
+     * closest equivalent Patchouli's entry icon has.</p>
      */
     private static String frontMatter(String title, String icon, String advancement,
                                       boolean secret) {

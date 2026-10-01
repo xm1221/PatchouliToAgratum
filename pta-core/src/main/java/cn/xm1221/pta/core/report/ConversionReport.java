@@ -17,7 +17,7 @@ import java.util.TreeMap;
 public final class ConversionReport {
     private final Map<String, Integer> droppedAnchors = new TreeMap<>();
     private final Map<String, Integer> unknownCommands = new TreeMap<>();
-    private final Map<String, Integer> unsupportedPageTypes = new TreeMap<>();
+    private final Map<String, Integer> hostedPageTypes = new TreeMap<>();
     private final Map<String, Integer> unrenderedTextFields = new TreeMap<>();
 
     private int documents;
@@ -53,9 +53,9 @@ public final class ConversionReport {
         bump(this.unknownCommands, body);
     }
 
-    /** A Patchouli page type with no renderer yet. */
-    public void unsupportedPageType(String type) {
-        bump(this.unsupportedPageTypes, type);
+    /** A page type that has no renderer, so Patchouli draws it instead. */
+    public void hostedPageType(String type) {
+        bump(this.hostedPageTypes, type);
     }
 
     /**
@@ -79,8 +79,8 @@ public final class ConversionReport {
         return frozen(this.unknownCommands);
     }
 
-    public Map<String, Integer> unsupportedPageTypes() {
-        return frozen(this.unsupportedPageTypes);
+    public Map<String, Integer> hostedPageTypes() {
+        return frozen(this.hostedPageTypes);
     }
 
     public Map<String, Integer> unrenderedTextFields() {
@@ -109,7 +109,7 @@ public final class ConversionReport {
     public boolean isClean() {
         return this.droppedAnchors.isEmpty()
                 && this.unknownCommands.isEmpty()
-                && this.unsupportedPageTypes.isEmpty()
+                && this.hostedPageTypes.isEmpty()
                 && this.unrenderedTextFields.isEmpty()
                 && this.droppedUnderlines == 0
                 && this.droppedPlayerNames == 0;
@@ -126,7 +126,7 @@ public final class ConversionReport {
         out.append("- dropped player names: ").append(this.droppedPlayerNames).append('\n');
 
         appendCounts(out, "Dropped anchors", this.droppedAnchors);
-        appendCounts(out, "Unsupported page types", this.unsupportedPageTypes);
+        appendCounts(out, "Page types rendered by Patchouli", this.hostedPageTypes);
         appendCounts(out, "Unknown commands", this.unknownCommands);
         appendCounts(out, "Unresolved text keys", this.unrenderedTextFields);
 
@@ -159,7 +159,7 @@ public final class ConversionReport {
     public Map<String, Integer> snapshot() {
         Map<String, Integer> snapshot = new LinkedHashMap<>();
         snapshot.putAll(this.droppedAnchors);
-        snapshot.putAll(this.unsupportedPageTypes);
+        snapshot.putAll(this.hostedPageTypes);
         snapshot.putAll(this.unknownCommands);
         snapshot.putAll(this.unrenderedTextFields);
         return snapshot;

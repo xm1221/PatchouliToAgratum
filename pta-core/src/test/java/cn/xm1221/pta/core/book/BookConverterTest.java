@@ -125,7 +125,7 @@ class BookConverterTest {
         assertTrue(document.contains("## Heading"), document);
         // The lock travels in the front matter.
         assertTrue(document.contains("pta_lock: \"minecraft:story/root\""), document);
-        assertTrue(output.report().unsupportedPageTypes().containsKey("patchouli:spotlight"),
+        assertTrue(output.report().hostedPageTypes().containsKey("patchouli:spotlight"),
                 output.report().toString());
     }
 
