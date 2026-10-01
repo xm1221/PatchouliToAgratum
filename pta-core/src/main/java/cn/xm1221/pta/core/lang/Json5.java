@@ -69,13 +69,25 @@ public final class Json5 {
         if (node instanceof Map<?, ?> map) {
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 String key = String.valueOf(entry.getKey());
-                flattenInto(prefix.isEmpty() ? key : prefix + "." + key, entry.getValue(), out);
+                // An empty key means "this node's own value", which is how these files give a
+                // node both a string value and children:
+                //     items: { "": "Items", desc: "..." }
+                // so it must not contribute a path segment.
+                String path;
+                if (key.isEmpty()) {
+                    path = prefix;
+                } else if (prefix.isEmpty()) {
+                    path = key;
+                } else {
+                    path = prefix + "." + key;
+                }
+                flattenInto(path, entry.getValue(), out);
             }
         } else if (node instanceof List<?> list) {
             for (int i = 0; i < list.size(); i++) {
                 flattenInto(prefix + "." + i, list.get(i), out);
             }
-        } else if (node != null) {
+        } else if (node != null && !prefix.isEmpty()) {
             out.put(prefix, stringify(node));
         }
     }

@@ -61,6 +61,29 @@ class Json5Test {
         assertEquals("two", flat.get("list.1"));
     }
 
+    /**
+     * These files give a node both a value and children by using an empty key for the value,
+     * which is how Minecraft's own flattening works. Missing this loses the node's own string
+     * and leaves a trailing dot in the key.
+     */
+    @Test
+    void treatsAnEmptyKeyAsTheParentKeyItself() {
+        Map<String, String> flat = Json5.flatten("""
+                {
+                  "hexcasting": {
+                    "category": {
+                      "items": { "": "Items", "desc": "I devote this section..." },
+                      "basics": { "": "Getting Started" }
+                    }
+                  }
+                }
+                """);
+        assertEquals("Items", flat.get("hexcasting.category.items"));
+        assertEquals("I devote this section...", flat.get("hexcasting.category.items.desc"));
+        assertEquals("Getting Started", flat.get("hexcasting.category.basics"));
+        assertFalse(flat.containsKey("hexcasting.category.items."), "trailing dot in a key");
+    }
+
     @Test
     void acceptsCommentsBareKeysAndTrailingCommas() {
         Map<String, String> flat = Json5.flatten("""
