@@ -18,6 +18,18 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
 
+// The conversion core is compiled into this mod rather than depended on as a jar.
+//
+// MDG builds the dev runtime's classpath from the source sets a mod claims plus a curated
+// library list, so a plain `implementation project(':pta-core')` resolves at compile time and
+// then fails at runtime with ClassNotFoundException. Compiling the sources directly works in
+// dev, in the built jar and in production with no Gradle-specific machinery.
+//
+// The purity of the core is still enforced by the build: the :pta-core project compiles these
+// same sources with no Minecraft on its classpath and runs the offline regression suite, and
+// `build` depends on it, so a reference to any game type breaks the build.
+sourceSets.main.java.srcDir(project(':pta-core').file('src/main/java'))
+
 repositories {
     // CN mirrors first. This machine's network reaches these far more reliably than the
     // upstream hosts, and everything already in the local cache resolves offline anyway.
@@ -74,6 +86,8 @@ neoForge {
 
     mods {
         "${mod_id}" {
+            // The conversion core's sources are compiled into this source set (see the srcDir
+            // below), so the mod is a single unit and needs no runtime classpath entry for it.
             sourceSet(sourceSets.main)
         }
     }
@@ -84,9 +98,6 @@ configurations {
 }
 
 dependencies {
-    // Pure-JVM conversion core. Lives in the same build but carries no Minecraft types.
-    implementation project(':pta-core')
-
     // Patchouli is a hard runtime dependency: this mod hosts real Patchouli pages instead of
     // re-implementing them. See docs/01-architecture.md.
     compileOnly "vazkii.patchouli:Patchouli:${patchouli_version}"
@@ -143,6 +154,12 @@ publishing {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+// `gradlew build` has to keep running the core's offline regression suite; it is the only
+// automated check this project has.
+tasks.named('build') {
+    dependsOn ':pta-core:build'
 }
 
 idea {
