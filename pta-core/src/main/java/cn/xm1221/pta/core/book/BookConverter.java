@@ -21,6 +21,16 @@ import java.util.Map;
  */
 public final class BookConverter {
     /**
+     * The document Ageratum opens for {@code /ageratum <namespace>}.
+     *
+     * <p>Its absence is why the command reports "Guide file not found": the loader resolves
+     * {@code ageratum/<language>/index.md} (falling back to {@code en_us}) and nothing else, so a
+     * book whose documents are all in subdirectories is unreachable from the command even though
+     * every one of them loaded.</p>
+     */
+    public static final String ROOT_DOCUMENT = "index";
+
+    /**
      * The generated documents.
      *
      * @param documents document path without {@code .md} to the file's full text
@@ -43,6 +53,8 @@ public final class BookConverter {
         ConversionReport report = ConversionReport.empty();
         MacroExpander expander = MacroExpander.of(layout.macros());
 
+        documents.put(ROOT_DOCUMENT, rootDocument(layout, lang, report, expander));
+
         for (BookLayout.Category category : layout.categories().values()) {
             documents.put(category.indexPath(), categoryDocument(layout, category, lang, report));
         }
@@ -53,6 +65,48 @@ public final class BookConverter {
         }
 
         return new Output(Map.copyOf(documents), report);
+    }
+
+    // ------------------------------------------------------------------ root document
+
+    /**
+     * The book's landing page: its name, its landing text, and links to each root category.
+     */
+    private static String rootDocument(BookLayout layout, Map<String, String> lang,
+                                       ConversionReport report, MacroExpander expander) {
+        String name = resolve(layout, lang, layout.nameKey(), report);
+        if (name.isBlank()) {
+            name = layout.bookName();
+        }
+        String landing = resolve(layout, lang, layout.landingTextKey(), report);
+
+        StringBuilder out = new StringBuilder();
+        out.append(frontMatter(name, null, null, false));
+        out.append("# ").append(name).append('\n');
+
+        if (!landing.isBlank()) {
+            out.append('\n')
+                    .append(convertText(layout, expander, ROOT_DOCUMENT, landing, report))
+                    .append('\n');
+        }
+
+        StringBuilder contents = new StringBuilder();
+        for (BookLayout.Category category : layout.categories().values()) {
+            if (category.parent() != null) {
+                continue;
+            }
+            String title = resolve(layout, lang, stringField(category.json(), "name"), report);
+            if (title.isBlank()) {
+                title = category.path();
+            }
+            contents.append("- [").append(title).append("](")
+                    .append(BookLayout.relativize(ROOT_DOCUMENT, category.indexPath()))
+                    .append(")\n");
+        }
+        if (contents.length() > 0) {
+            out.append("\n## ").append(name).append(" chapters\n\n").append(contents);
+        }
+        return out.toString();
     }
 
     // ------------------------------------------------------------------- categories

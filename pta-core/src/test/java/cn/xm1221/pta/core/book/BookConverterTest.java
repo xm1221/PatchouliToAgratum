@@ -37,8 +37,8 @@ class BookConverterTest {
     void convertsTheWholeBook() throws IOException {
         BookConverter.Output output = convertHexmod();
 
-        // One document per category index plus one per entry.
-        assertEquals(9 + 83, output.documents().size());
+        // One root document, one per category index, and one per entry.
+        assertEquals(1 + 9 + 83, output.documents().size());
         assertEquals(83, output.report().documents());
 
         for (Map.Entry<String, String> document : output.documents().entrySet()) {
@@ -47,6 +47,29 @@ class BookConverterTest {
             assertTrue(text.contains("\ntitle: \""), document.getKey() + " has no title");
             assertTrue(text.length() > 40, document.getKey() + " looks empty");
         }
+    }
+
+    /**
+     * Ageratum's command opens {@code ageratum/<language>/index.md} and nothing else, so a book
+     * without a root document is unreachable even when every one of its documents loaded.
+     */
+    @Test
+    void writesTheRootDocumentTheCommandOpens() throws IOException {
+        BookConverter.Output output = convertHexmod();
+        String root = output.documents().get(BookConverter.ROOT_DOCUMENT);
+        assertNotNull(root, "no root document, so /ageratum would report 'file not found'");
+        assertEquals("Hex Notebook", titleOf(root));
+        assertTrue(root.contains("I seem to have discovered a new method"), root);
+        // The landing page links to each root category, and not to nested ones.
+        assertTrue(root.contains("](items/index)"), root);
+        assertTrue(root.contains("](patterns/index)"), root);
+        assertFalse(root.contains("great_spells/index"), "a nested category is not a root one");
+    }
+
+    private static String titleOf(String document) {
+        int start = document.indexOf("title: \"") + "title: \"".length();
+        int end = document.indexOf('"', start);
+        return document.substring(start, end);
     }
 
     @Test

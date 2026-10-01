@@ -94,8 +94,9 @@ public final class PtaGuideSource {
                 bookId, layout.categories().size(), layout.entries().size());
 
         ConversionReport merged = ConversionReport.empty();
+        Set<String> languages = outputLanguages(namespace, source);
         int written = 0;
-        for (String language : outputLanguages(namespace, source)) {
+        for (String language : languages) {
             String langPath = "assets/" + namespace + "/lang/" + language + ".json";
             String langText = source.read(langPath);
             Map<String, String> lang = langText == null ? Map.of() : Json5.flatten(langText);
@@ -115,7 +116,8 @@ public final class PtaGuideSource {
             }
         }
 
-        LOGGER.info("[pta] {} documents generated for {}", written, bookId);
+        LOGGER.info("[pta] {} documents generated for {} (languages: {})",
+                written, bookId, String.join(", ", languages));
         if (!merged.isClean()) {
             LOGGER.info("[pta] conversion notes for {}:\n{}", bookId, merged.toMarkdown());
         }

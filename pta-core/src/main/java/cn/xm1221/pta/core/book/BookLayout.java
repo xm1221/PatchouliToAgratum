@@ -181,6 +181,20 @@ public final class BookLayout {
         return boolOr(this.bookJson.get("i18n"), false);
     }
 
+    /**
+     * The book's display name. A language key when the book uses i18n.
+     */
+    public String nameKey() {
+        return stringOrNull(this.bookJson.get("name"));
+    }
+
+    /**
+     * The book's landing text. A language key when the book uses i18n.
+     */
+    public String landingTextKey() {
+        return stringOrNull(this.bookJson.get("landing_text"));
+    }
+
     /** The book's own macro table. */
     public Map<String, String> macros() {
         Map<String, String> result = new LinkedHashMap<>();

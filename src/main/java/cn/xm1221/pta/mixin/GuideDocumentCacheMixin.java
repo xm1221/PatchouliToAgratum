@@ -50,7 +50,10 @@ public class GuideDocumentCacheMixin {
             ResourceManager manager, String path, Predicate<ResourceLocation> filter) {
         Map<ResourceLocation, Resource> listed = manager.listResources(path, filter);
         Map<ResourceLocation, Resource> merged = new LinkedHashMap<>(listed);
-        merged.putAll(PtaGuideSource.documents(manager, path, filter));
+        // putIfAbsent, not putAll: a document that really exists in a resource pack is a deliberate
+        // statement and outranks anything this mod synthesises. Without this, mirroring a book
+        // into a namespace that also ships hand-written guides would silently replace them.
+        PtaGuideSource.documents(manager, path, filter).forEach(merged::putIfAbsent);
         return merged;
     }
 }
