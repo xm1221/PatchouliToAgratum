@@ -104,7 +104,7 @@ public final class BookConverter {
         String landing = resolve(layout, lang, layout.landingTextKey(), texts.report());
 
         StringBuilder out = new StringBuilder();
-        out.append(frontMatter(name, null, null, false, null));
+        out.append(frontMatter(name, null, false, null));
         out.append("# ").append(name).append('\n');
 
         if (!landing.isBlank()) {
@@ -138,7 +138,7 @@ public final class BookConverter {
                 texts.report());
 
         StringBuilder out = new StringBuilder();
-        out.append(frontMatter(name, category.icon(), null, category.secret(), chapterWeight(category)));
+        out.append(frontMatter(name, null, category.secret(), chapterWeight(category)));
         out.append("# ").append(name).append("\n");
         if (!description.isBlank()) {
             out.append('\n')
@@ -198,7 +198,7 @@ public final class BookConverter {
         }
 
         StringBuilder out = new StringBuilder();
-        out.append(frontMatter(name, entry.icon(), entry.advancement(), entry.secret(), null));
+        out.append(frontMatter(name, entry.advancement(), entry.secret(), null));
         out.append("# ").append(name).append('\n');
         if (body.length() > 0) {
             out.append('\n').append(body);
@@ -264,21 +264,18 @@ public final class BookConverter {
     /**
      * Builds the YAML front matter block.
      *
-     * <p>{@code items} is the binding that gives Ageratum's "ponder" behaviour for free, so an
-     * entry whose icon is an item becomes reachable by holding the ponder key over that item — the
-     * closest equivalent Patchouli's entry icon has.</p>
+     * <p>Only what the book itself said goes in: its name, its lock, its secrecy, its order. The
+     * entry icon is deliberately not written as an {@code items} binding — that would make the
+     * guide respond to the player holding an item, which is behaviour the original book does not
+     * have, and a converted book should not gain features its source never had.</p>
      *
      * @param weight sidebar ordering, or {@code null} to leave the document at the default
      */
-    private static String frontMatter(String title, String icon, String advancement,
-                                      boolean secret, Integer weight) {
+    private static String frontMatter(String title, String advancement, boolean secret,
+                                      Integer weight) {
         StringBuilder out = new StringBuilder();
         out.append("---\n");
         out.append("title: \"").append(escapeYaml(title)).append("\"\n");
-        String item = itemId(icon);
-        if (item != null) {
-            out.append("items: \"").append(escapeYaml(item)).append("\"\n");
-        }
         if (advancement != null && !advancement.isBlank()) {
             out.append("pta_lock: \"").append(escapeYaml(advancement)).append("\"\n");
         }
@@ -290,16 +287,6 @@ public final class BookConverter {
         }
         out.append("---\n\n");
         return out.toString();
-    }
-
-    /**
-     * Patchouli icons are either an item id or a texture path; only the former can bind.
-     */
-    private static String itemId(String icon) {
-        if (icon == null || icon.isBlank() || icon.endsWith(".png")) {
-            return null;
-        }
-        return icon;
     }
 
     private static String escapeYaml(String value) {

@@ -89,10 +89,17 @@ class BookConverterTest {
         BookConverter.Output output = convertHexmod();
         String amethyst = output.documents().get("items/amethyst");
         assertNotNull(amethyst);
-        // The entry icon becomes an item binding, which gives Ageratum's ponder behaviour.
-        assertTrue(amethyst.contains("items: \"minecraft:amethyst_shard\""), amethyst);
         assertTrue(amethyst.contains("title: \"Amethyst\""), amethyst);
         assertTrue(amethyst.contains("pta_lock: \"hexcasting:root\""), amethyst);
+        // The entry icon is not turned into an item binding: that would make the guide react to
+        // the player holding the item, which the book it came from does not do.
+        assertFalse(frontMatterOf(amethyst).contains("items:"), amethyst);
+    }
+
+    /** The YAML block a document opens with, so a test can look at it without the prose. */
+    private static String frontMatterOf(String document) {
+        int end = document.indexOf("\n---", 3);
+        return end < 0 ? document : document.substring(0, end);
     }
 
     @Test
@@ -137,18 +144,11 @@ class BookConverterTest {
     }
 
     @Test
-    void dropsTextureIconsRatherThanBindingThem() {
-        Map<String, String> files = new LinkedHashMap<>();
-        files.put("data/demo/patchouli_books/demo/book.json", "{ name: \"Demo\" }");
-        files.put("assets/demo/patchouli_books/demo/en_us/categories/demo.json",
-                "{ name: \"Demo\", description: \"d\", icon: \"minecraft:book\" }");
-        files.put("assets/demo/patchouli_books/demo/en_us/entries/demo/item.json",
-                "{ name: \"T\", icon: \"demo:textures/gui/thing.png\", category: \"demo:demo\","
-                        + " pages: [ { type: \"patchouli:text\", text: \"x\" } ] }");
-
-        BookLayout layout = BookLayout.load(BookSource.of(files), "demo", "demo", "en_us");
-        String document = BookConverter.convert(layout, Map.of()).documents().get("demo/item");
-        assertFalse(document.contains("items:"), "a texture path is not an item id: " + document);
+    void noDocumentBindsItselfToAnItem() throws IOException {
+        for (Map.Entry<String, String> document : convertHexmod().documents().entrySet()) {
+            assertFalse(frontMatterOf(document.getValue()).contains("items:"),
+                    document.getKey() + " binds an item: " + document.getValue());
+        }
     }
 
     /**
