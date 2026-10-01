@@ -48,8 +48,7 @@ public final class PtaGuidePack implements PackResources {
     public PtaGuidePack() {
         Map<ResourceLocation, String> generated;
         try {
-            generated = new LinkedHashMap<>(PtaGuideAssets.build());
-            generated.putAll(PtaGuideDocuments.build());
+            generated = new LinkedHashMap<>(PtaGuideDocuments.build());
         } catch (Throwable throwable) {
             // A failure here happens while the game is assembling its resource packs, where an
             // exception would take the whole reload down. Serving nothing is the correct response:

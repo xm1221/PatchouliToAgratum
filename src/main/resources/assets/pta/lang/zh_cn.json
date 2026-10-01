@@ -1,7 +1,5 @@
 {
   "item.pta.guidebook": "帕秋莉导读",
-  "item.pta.guidebook.hint": "右键：以藿香导读的形式阅读这本帕秋莉手册",
-  "item.pta.guidebook.unset": "未指定手册",
   "pta.lock.locked": "此内容尚未解锁。",
   "pta.lock.secret": "解锁条件尚未可知。",
   "pta.lock.requires": "解锁条件：%s",

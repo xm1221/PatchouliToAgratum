@@ -10,8 +10,9 @@ import dev.anvilcraft.resource.ageratum.Ageratum;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Where a mirrored book lives once it is a guide.
@@ -20,12 +21,23 @@ import java.util.Map;
  * {@code hexcasting}, whose documents sit beside the ones the mod itself ships. Opening it is
  * therefore just {@code <namespace>:index}, the same entry point {@code /ageratum <namespace>}
  * uses, and this class is the one place that knows it.</p>
+ *
+ * <p>A book's own {@code book.json} is what says what it is called and what it wears. That file is
+ * read once per book per session: the item asks for both every time it is drawn, and re-reading a
+ * file from a mod jar to draw an item would be absurd.</p>
  */
 public final class PtaGuides {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     /** The document every Ageratum guide is entered through. */
     private static final String ENTRY = "index";
+
+    /** What a book that names no model of its own wears, matching Patchouli's own default. */
+    private static final ResourceLocation DEFAULT_MODEL =
+            ResourceLocation.fromNamespaceAndPath("patchouli", "item/book_brown");
+
+    private static final Map<ResourceLocation, Optional<String>> NAMES = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, ResourceLocation> MODELS = new ConcurrentHashMap<>();
 
     private PtaGuides() {
     }
@@ -42,30 +54,14 @@ public final class PtaGuides {
     /**
      * Opens a mirrored book as a guide.
      *
-     * @param book the book's id, or {@code null} to open the first mirrored book
+     * @param book the book to open
      * @return whether anything was opened
      */
-    public static boolean open(ServerPlayer player, @Nullable ResourceLocation book) {
-        ResourceLocation target = book == null ? firstBook() : book;
-        if (target == null) {
-            LOGGER.warn("[pta] a guidebook was used but no book is mirrored; nothing to open");
-            return false;
-        }
-
+    public static boolean open(ServerPlayer player, ResourceLocation book) {
         // The guide is entered by document, not by book: a book's documents live in the book's own
         // namespace, so the entry point is <namespace>:index.
-        Ageratum.openGuide(player, ResourceLocation.fromNamespaceAndPath(target.getNamespace(), ENTRY));
+        Ageratum.openGuide(player, ResourceLocation.fromNamespaceAndPath(book.getNamespace(), ENTRY));
         return true;
-    }
-
-    /**
-     * The first mirrored book, used by a guidebook that names none.
-     *
-     * @return the book, or {@code null} when nothing is mirrored or the configuration is unreadable
-     */
-    public static @Nullable ResourceLocation firstBook() {
-        List<ResourceLocation> books = PtaBookList.effectiveBooks();
-        return books.isEmpty() ? null : books.get(0);
     }
 
     /**
@@ -88,7 +84,8 @@ public final class PtaGuides {
      * @return the key as written in {@code book.json}, or {@code null} when there is none
      */
     public static @Nullable String bookNameKey(ResourceLocation book) {
-        return bookString(book, "name");
+        return NAMES.computeIfAbsent(book, id -> Optional.ofNullable(bookString(id, "name")))
+                .orElse(null);
     }
 
     /**
@@ -100,16 +97,19 @@ public final class PtaGuides {
      *
      * @return the item model id, or the default brown Patchouli book when the book names none
      */
-    public static String bookItemModel(ResourceLocation book) {
+    public static ResourceLocation bookItemModel(ResourceLocation book) {
+        return MODELS.computeIfAbsent(book, PtaGuides::readBookModel);
+    }
+
+    private static ResourceLocation readBookModel(ResourceLocation book) {
         String declared = bookString(book, "model");
         ResourceLocation model = declared == null ? null : ResourceLocation.tryParse(declared);
         if (model == null) {
-            model = ResourceLocation.fromNamespaceAndPath("patchouli", "book_brown");
+            return DEFAULT_MODEL;
         }
         return model.getPath().startsWith("item/")
-                ? model.toString()
-                : ResourceLocation.fromNamespaceAndPath(model.getNamespace(), "item/" + model.getPath())
-                        .toString();
+                ? model
+                : ResourceLocation.fromNamespaceAndPath(model.getNamespace(), "item/" + model.getPath());
     }
 
     /**

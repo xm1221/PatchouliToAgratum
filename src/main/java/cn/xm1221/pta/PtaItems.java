@@ -1,20 +1,14 @@
 package cn.xm1221.pta;
 
 import cn.xm1221.pta.item.GuideBookItem;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomModelData;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.List;
 
 /**
  * The items this mod adds.
@@ -41,31 +35,14 @@ public final class PtaItems {
     /**
      * A guidebook for one book.
      *
-     * <p>Two things beyond the component are set here, and both exist so that the stack looks and
-     * reads like the book it opens: the Patchouli model that book wears (see
-     * {@link cn.xm1221.pta.client.source.PtaGuideAssets}), and the book's own name key, which the
-     * client already has translated.</p>
+     * <p>Only the component is set. The name and the model both come from it while the stack is
+     * read or drawn, so a stack made anywhere else reads and looks the same as this one.</p>
      *
-     * @param book the book to open, or {@code null} for a guidebook that names none
+     * @param book the book to open
      */
-    public static ItemStack guideStack(@Nullable ResourceLocation book) {
+    public static ItemStack guideStack(ResourceLocation book) {
         ItemStack stack = new ItemStack(GUIDEBOOK.get());
-        if (book == null) {
-            return stack;
-        }
         stack.set(PtaDataComponents.GUIDE.get(), book);
-
-        // Model overrides are indexed by position in the mirrored list, which is the order the
-        // generated models were built in. Entry 0 wears the base model and needs no override.
-        int index = PtaBookList.effectiveBooks().indexOf(book);
-        if (index > 0) {
-            stack.set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(index));
-        }
-
-        String nameKey = PtaGuides.bookNameKey(book);
-        if (nameKey != null) {
-            stack.set(DataComponents.ITEM_NAME, Component.translatable(nameKey));
-        }
         return stack;
     }
 
@@ -73,20 +50,14 @@ public final class PtaItems {
      * Adds one guidebook per mirrored book to the creative inventory.
      *
      * <p>Runs while the tab contents are being built, which the integrated server does with the
-     * client's configuration in hand. A dedicated server has no client configuration to read, so
-     * it offers the bare item instead of one per book.</p>
+     * client's configuration in hand. A book that names no book does nothing, so when nothing is
+     * mirrored the tab gets nothing rather than an inert item.</p>
      */
     public static void addToCreativeTab(BuildCreativeModeTabContentsEvent event) {
         if (!event.getTabKey().equals(CreativeModeTabs.TOOLS_AND_UTILITIES)) {
             return;
         }
-
-        List<ResourceLocation> books = PtaBookList.effectiveBooks();
-        if (books.isEmpty()) {
-            event.accept(guideStack(null));
-            return;
-        }
-        for (ResourceLocation book : books) {
+        for (ResourceLocation book : PtaBookList.effectiveBooks()) {
             event.accept(guideStack(book));
         }
     }

@@ -1,7 +1,5 @@
 {
   "item.pta.guidebook": "Patchouli Guide",
-  "item.pta.guidebook.hint": "Right-click to read this Patchouli manual as an Ageratum guide",
-  "item.pta.guidebook.unset": "No book selected",
   "pta.lock.locked": "This page is not unlocked yet.",
   "pta.lock.secret": "What unlocks it is a secret.",
   "pta.lock.requires": "Unlocks with: %s",
