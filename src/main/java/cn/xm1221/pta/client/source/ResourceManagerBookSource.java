@@ -8,6 +8,8 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -49,6 +51,13 @@ public final class ResourceManagerBookSource implements BookSource {
 
     /**
      * Reads a {@code data/} resource straight out of the owning mod's file.
+     *
+     * <p>The path is used whole, {@code data/} included, because that prefix is a real directory
+     * inside the mod file. Patchouli reads its books from the mod file for the same reason: a
+     * client resource manager only serves {@code assets/}.</p>
+     *
+     * <p>Several lookups are tried because a mod is a directory in a development environment and
+     * a jar in production, and the two are not reachable the same way.</p>
      */
     private static String readFromModFile(String resourcePath) {
         String remainder = resourcePath.substring("data/".length());
@@ -57,21 +66,59 @@ public final class ResourceManagerBookSource implements BookSource {
             return null;
         }
         String namespace = remainder.substring(0, slash);
-        String withinMod = remainder.substring(slash + 1);
 
-        var modFile = net.neoforged.fml.ModList.get().getModFileById(namespace);
-        if (modFile == null) {
+        var modFileInfo = net.neoforged.fml.ModList.get().getModFileById(namespace);
+        if (modFileInfo == null) {
             return null;
         }
-        java.nio.file.Path file = modFile.getFile().findResource(withinMod.split("/"));
-        if (file == null || !java.nio.file.Files.isRegularFile(file)) {
-            return null;
+        var modFile = modFileInfo.getFile();
+
+        List<Path> candidates = new ArrayList<>();
+        try {
+            // The jar's (or directory's) own root, which is what Patchouli walks to find books.
+            Path root = modFile.getSecureJar().getRootPath();
+            if (root != null) {
+                candidates.add(root.resolve(resourcePath));
+            }
+        } catch (RuntimeException ignored) {
+            // Not every mod file exposes a usable root; the other lookups cover it.
         }
         try {
-            return java.nio.file.Files.readString(file, StandardCharsets.UTF_8);
-        } catch (IOException exception) {
-            return null;
+            Path found = modFile.findResource(resourcePath.split("/"));
+            if (found != null) {
+                candidates.add(found);
+            }
+        } catch (RuntimeException ignored) {
+            // Same.
         }
+        Path filePath = modFile.getFilePath();
+        if (filePath != null && Files.isDirectory(filePath)) {
+            candidates.add(filePath.resolve(resourcePath));
+        }
+
+        for (Path candidate : candidates) {
+            try {
+                if (Files.isRegularFile(candidate)) {
+                    return Files.readString(candidate, StandardCharsets.UTF_8);
+                }
+            } catch (IOException | RuntimeException ignored) {
+                // Try the next candidate.
+            }
+        }
+
+        if (filePath != null && Files.isRegularFile(filePath)) {
+            try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(filePath.toFile())) {
+                java.util.zip.ZipEntry entry = zip.getEntry(resourcePath);
+                if (entry != null) {
+                    try (InputStream stream = zip.getInputStream(entry)) {
+                        return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+                    }
+                }
+            } catch (IOException | IllegalArgumentException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     @Override
@@ -120,5 +167,10 @@ public final class ResourceManagerBookSource implements BookSource {
         String namespace = remainder.substring(0, slash);
         String path = remainder.substring(slash + 1);
         return Optional.of(ResourceLocation.fromNamespaceAndPath(namespace, path));
+    }
+
+    @Override
+    public String toString() {
+        return "ResourceManagerBookSource[" + this.manager.listPacks().count() + " packs]";
     }
 }

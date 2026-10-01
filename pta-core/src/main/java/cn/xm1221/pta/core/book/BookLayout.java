@@ -109,7 +109,9 @@ public final class BookLayout {
         String bookPath = "data/" + namespace + "/" + BookSource.NAMESPACE_BOOKS + "/" + bookName + "/book.json";
         String bookText = source.read(bookPath);
         if (bookText == null) {
-            throw new IllegalArgumentException("no book.json at " + bookPath);
+            // Naming the source matters: "not found" in a jar-backed source and "not found" on
+            // disk have completely different causes.
+            throw new IllegalArgumentException("no book.json at " + bookPath + " in " + source);
         }
         Map<String, Object> bookJson = asObject(Json5.parse(bookText), bookPath);
 
