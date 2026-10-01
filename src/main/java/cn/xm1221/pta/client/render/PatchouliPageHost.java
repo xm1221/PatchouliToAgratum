@@ -25,16 +25,6 @@ import java.util.List;
  * object itself, so a detached page can be laid out at an arbitrary origin and rendered as
  * an ordinary widget.</p>
  *
- * <h2>Two modes</h2>
- * <ul>
- *   <li><b>Page only</b> (default) — draws just the page body at the component origin. No
- *       scissor is needed, because nothing else is drawn, so this mode cannot be affected by
- *       clipping maths at all.</li>
- *   <li><b>Chrome</b> — draws the whole Patchouli screen so the surrounding book page and
- *       paper texture show. That draws 272x180 of content into a 116x156 box, so the caller
- *       must clip; see {@link #renderChrome}.</li>
- * </ul>
- *
  * <h2>Why init() is called rather than setupPages()</h2>
  * <p>{@code setupPages()} is private and only runs from {@code init()} / {@code onPageChanged()}.
  * {@code init()} is also the only public way to give the detached screen a {@code Minecraft}
@@ -53,24 +43,42 @@ public final class PatchouliPageHost {
     private static final int LEFT_PAGE_X = 15;
     private static final int RIGHT_PAGE_X = 141;
 
+    /**
+     * How much of Patchouli's own chrome to draw around the page.
+     */
+    public enum Appearance {
+        /**
+         * Only the page body. Nothing else is drawn, so no clipping is needed and the page
+         * blends into the guide background. This is the intended look: the page reads as part
+         * of the guide rather than as a window onto another book.
+         */
+        PLAIN,
+        /**
+         * The whole 272x180 Patchouli screen. This is the only mode that draws outside the
+         * component box, and it is deliberately not the default: see the warning in
+         * {@code MDPatchouliPageComponent#render}. Kept only so the difference can be seen.
+         */
+        BOOK
+    }
+
     private final ResourceLocation bookId;
     private final ResourceLocation entryId;
     private final int pageIndex;
-    private final boolean pageOnly;
+    private final Appearance appearance;
 
     private @Nullable GuiBookEntry gui;
     private @Nullable BookPage page;
-    /** Page origin inside the book; only meaningful in chrome mode. */
+    /** Page origin inside the book, i.e. {@code LEFT_PAGE_X} or {@code RIGHT_PAGE_X}. */
     private int pageX = LEFT_PAGE_X;
     private boolean resolved;
     private @Nullable String error;
 
     public PatchouliPageHost(ResourceLocation bookId, ResourceLocation entryId, int pageIndex,
-                             boolean pageOnly) {
+                             Appearance appearance) {
         this.bookId = bookId;
         this.entryId = entryId;
         this.pageIndex = pageIndex;
-        this.pageOnly = pageOnly;
+        this.appearance = appearance;
     }
 
     public int width() {
@@ -79,6 +87,10 @@ public final class PatchouliPageHost {
 
     public int height() {
         return PAGE_HEIGHT;
+    }
+
+    public Appearance appearance() {
+        return this.appearance;
     }
 
     /** @return a human readable failure reason, or {@code null} when the host is usable. */
@@ -144,13 +156,13 @@ public final class PatchouliPageHost {
             contents.currentGui = previousCurrentGui;
 
             BookPage target = pages.get(this.pageIndex);
-            if (this.pageOnly) {
+            if (this.appearance == Appearance.BOOK) {
+                host.bookLeft = -this.pageX;
+                host.bookTop = -TOP_PADDING;
+            } else {
                 // Place the page at the detached screen's origin so the page's own coordinates
                 // line up with the component's. bookLeft/bookTop are already 0 from init().
                 target.onDisplayed(host, 0, 0);
-            } else {
-                host.bookLeft = -this.pageX;
-                host.bookTop = -TOP_PADDING;
             }
 
             this.gui = host;
@@ -183,12 +195,7 @@ public final class PatchouliPageHost {
         if (target == null) {
             return;
         }
-        // The host is never the active screen, so nothing ticks it. Drive the counter from
-        // wall clock time instead: PageSpotlight cycles its item every 20 ticks.
-        GuiBookEntry host = this.gui;
-        if (host != null) {
-            host.ticksInBook = (int) (System.currentTimeMillis() / 50L);
-        }
+        tick();
         target.render(graphics, Math.round(mouseX), Math.round(mouseY), 0.0F);
     }
 
@@ -200,15 +207,26 @@ public final class PatchouliPageHost {
      * @param mouseX component-local mouse X
      * @param mouseY component-local mouse Y
      */
-    public void renderChrome(GuiGraphics graphics, float mouseX, float mouseY) {
+    public void renderBook(GuiGraphics graphics, float mouseX, float mouseY) {
         GuiBookEntry host = this.gui;
         if (host == null) {
             return;
         }
-        host.ticksInBook = (int) (System.currentTimeMillis() / 50L);
+        tick();
         // GuiBookEntry subtracts page.left / page.top before handing coordinates to the page,
         // so add our page origin back to get page-local mouse coordinates.
         host.render(graphics, Math.round(mouseX) + this.pageX, Math.round(mouseY) + TOP_PADDING,
                 0.0F);
+    }
+
+    /**
+     * The host is never the active screen, so nothing ticks it. Drive the counter from wall
+     * clock time instead: PageSpotlight cycles its item every 20 ticks.
+     */
+    private void tick() {
+        GuiBookEntry host = this.gui;
+        if (host != null) {
+            host.ticksInBook = (int) (System.currentTimeMillis() / 50L);
+        }
     }
 }

@@ -17,7 +17,8 @@ import org.jetbrains.annotations.Nullable;
  *
  * <pre>{@code
  * <pta:page book="hexcasting:thehexbook" entry="patterns/basics" page="0"/>
- * <pta:page book="hexcasting:thehexbook" entry="patterns/basics" page="0" chrome="true"/>
+ * <pta:page book="hexcasting:thehexbook" entry="patterns/basics" page="0" look="plain"/>
+ * <pta:page book="hexcasting:thehexbook" entry="patterns/basics" page="0" look="book"/>
  * }</pre>
  *
  * <p>The real {@link vazkii.patchouli.client.book.BookPage} is constructed and drawn by
@@ -25,19 +26,16 @@ import org.jetbrains.annotations.Nullable;
  * as Hex Casting's {@code hexcasting:pattern} pages with their own component processors.
  * This mod never has to know about any of them.</p>
  *
- * <p>By default only the page body is drawn, which needs no clipping. Passing
- * {@code chrome="true"} additionally draws the surrounding book page and paper texture, but
- * that renders 272x180 into a 116x156 box and therefore has to be clipped.</p>
+ * <p>Three appearances are available; see {@link PatchouliPageHost.Appearance}. The default,
+ * {@code plain}, draws only the page body and therefore needs no clipping at all.</p>
  */
 public class MDPatchouliPageComponent extends MDComponent {
     private final PatchouliPageHost host;
-    private final boolean chrome;
 
     public MDPatchouliPageComponent(ResourceLocation bookId, ResourceLocation entryId, int pageIndex,
-                                    boolean chrome) {
+                                    PatchouliPageHost.Appearance appearance) {
         super(FormattedText.EMPTY);
-        this.chrome = chrome;
-        this.host = new PatchouliPageHost(bookId, entryId, pageIndex, !chrome);
+        this.host = new PatchouliPageHost(bookId, entryId, pageIndex, appearance);
     }
 
     @Override
@@ -62,33 +60,39 @@ public class MDPatchouliPageComponent extends MDComponent {
         PoseStack pose = graphics.pose();
         pose.pushPose();
         try {
-            if (!this.chrome) {
-                // Nothing but the page is drawn, so there is nothing to clip away.
-                this.host.renderPageOnly(graphics, context.mouseX(), context.mouseY());
+            if (this.host.appearance() == PatchouliPageHost.Appearance.BOOK) {
+                this.renderBookAppearance(context, graphics);
                 return;
             }
 
-            // Chrome mode also draws the 272x180 book around the 116x156 page, so it has to be
-            // clipped to the page box.
-            //
-            // WARNING: this is the least reliable part of the component, and it is *not* the
-            // default for that reason. MDRenderContext.enableScissor() converts component-local
-            // coordinates to screen space by adding offsetX/offsetY/leftPos and then dividing by
-            // MDRenderContext.scale(). That value comes from
-            // GuideScreen#scale = window.getGuiScale() / calculateScale (GuideScreen.java:346),
-            // which is not 1 in general. In 1.21.1 GuiGraphics.enableScissor() ignores the pose
-            // entirely and takes absolute GUI-space coordinates, so nothing compensates for that
-            // division: whenever scale < 1 the rectangle grows, moves down-right, and shears the
-            // top-left corner off the page — exactly the "top of the book page is missing"
-            // symptom. Page-only mode sidesteps the whole question by not needing a scissor.
-            context.enableScissor(0, 0, this.host.width(), this.host.height());
-            try {
-                this.host.renderChrome(graphics, context.mouseX(), context.mouseY());
-            } finally {
-                context.disableScissor();
-            }
+            // PLAIN draws exactly the component's own rectangle and nothing else, so there is
+            // never anything outside the box to clip away.
+            this.host.renderPageOnly(graphics, context.mouseX(), context.mouseY());
         } finally {
             pose.popPose();
+        }
+    }
+
+    /**
+     * The only mode that draws outside the component box, and therefore the only one that has
+     * to clip. Kept for comparison, not as the default.
+     *
+     * <p><b>Warning:</b> this path is unreliable on Ageratum builds where
+     * {@code GuideScreen#scale} is not 1. {@code MDRenderContext.enableScissor} converts
+     * component-local coordinates to screen space by adding {@code offsetX/offsetY/leftPos}
+     * and then <i>dividing</i> by {@code MDRenderContext.scale}, which comes from
+     * {@code GuideScreen#scale = window.getGuiScale() / calculateScale}
+     * ({@code GuideScreen.java:346}). In 1.21.1 {@code GuiGraphics.enableScissor} ignores the
+     * pose and takes absolute GUI-space coordinates, so nothing compensates for that division:
+     * whenever scale &lt; 1 the rectangle grows, moves down-right, and shears the top-left
+     * corner off the page. {@code Appearance.PAPER} gets the same look without any of this.</p>
+     */
+    private void renderBookAppearance(MDRenderContext context, GuiGraphics graphics) {
+        context.enableScissor(0, 0, this.host.width(), this.host.height());
+        try {
+            this.host.renderBook(graphics, context.mouseX(), context.mouseY());
+        } finally {
+            context.disableScissor();
         }
     }
 
@@ -98,7 +102,7 @@ public class MDPatchouliPageComponent extends MDComponent {
     }
 
     /**
-     * Parses {@code <pta:page book="..." entry="..." page="0" chrome="false"/>}.
+     * Parses {@code <pta:page book="..." entry="..." page="0" look="paper"/>}.
      *
      * @return the component, or an inline error component when the parameters are unusable
      */
@@ -135,7 +139,29 @@ public class MDPatchouliPageComponent extends MDComponent {
             }
         }
 
+        PatchouliPageHost.Appearance appearance = parseAppearance(context);
+        if (appearance == null) {
+            return new MDTextComponent("[错误：pta:page 的 look 只接受 plain / book]");
+        }
+        return new MDPatchouliPageComponent(bookId, entryId, pageIndex, appearance);
+    }
+
+    /**
+     * Reads {@code look}, falling back to the older boolean {@code chrome} parameter.
+     *
+     * @return the appearance, or {@code null} when the value is not recognised
+     */
+    private static PatchouliPageHost.Appearance parseAppearance(MDExtensionContext context) {
+        String rawLook = context.params().get("look");
+        if (rawLook != null && !rawLook.isBlank()) {
+            return switch (rawLook.trim().toLowerCase(java.util.Locale.ROOT)) {
+                case "plain" -> PatchouliPageHost.Appearance.PLAIN;
+                case "book", "chrome" -> PatchouliPageHost.Appearance.BOOK;
+                default -> null;
+            };
+        }
+        // Backwards compatibility with the first iteration of this component.
         boolean chrome = Boolean.parseBoolean(context.params().getOrDefault("chrome", "false"));
-        return new MDPatchouliPageComponent(bookId, entryId, pageIndex, chrome);
+        return chrome ? PatchouliPageHost.Appearance.BOOK : PatchouliPageHost.Appearance.PLAIN;
     }
 }

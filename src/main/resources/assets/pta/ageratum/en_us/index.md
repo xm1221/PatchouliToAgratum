@@ -38,23 +38,25 @@ produced by Patchouli itself — this mod does not implement any page type.
 
 <pta:page book="pta:spike" entry="spike" page="5"/>
 
-## Chrome comparison
+## Appearance comparison
 
-The blocks above draw the page body only. The one below additionally asks for the
-surrounding book page and paper texture with `chrome="true"`, which is the mode that has to
-be clipped:
+By default only the page body is drawn, with nothing behind it, so the page reads as part of
+the guide rather than as a window onto another book:
 
-<pta:page book="pta:spike" entry="spike" page="1" chrome="true"/>
+<pta:page book="pta:spike" entry="spike" page="1"/>
+
+Passing `look="book"` draws the whole surrounding book page instead. That is the only mode
+which needs a scissor, and it is kept purely to show the difference:
+
+<pta:page book="pta:spike" entry="spike" page="1" look="book"/>
 
 ## What to look for
 
 * Every page keeps its own layout: the spotlight banner, the crafting grid, the bordered
   image and the entity preview should all be visually identical to the same page in the real
   Patchouli book.
-* The page body should be **complete from its first line**. A missing top band means the
-  drawing area and the clip rectangle disagree.
-* In page-only mode nothing needs clipping, so any missing content there is a layout problem
-  rather than a clipping one. In chrome mode, only the page should show — no book margins, no
-  second page, no navigation arrows.
-* Nothing should be clickable yet. Input forwarding is deliberately not wired up in this
-  first pass.
+* The page must be **complete from its first line**. A missing top band is the failure this
+  document exists to catch.
+* `look="book"` is expected to look wrong: it demonstrates the clipping bug that the default
+  appearance avoids entirely.
+* Nothing is clickable yet. Input forwarding is deliberately not wired up in this pass.
