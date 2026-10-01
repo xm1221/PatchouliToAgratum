@@ -37,15 +37,18 @@ public final class PtaBookList {
      */
     public static List<ResourceLocation> effectiveBooks() {
         List<ResourceLocation> candidates;
+        Set<String> excluded;
         try {
+            // Both reads are in one try: this runs on a dedicated server too, where the client
+            // configuration is never loaded and reading it throws rather than returning defaults.
             List<ResourceLocation> configured = PtaConfig.books();
             candidates = configured == null ? discoverBooks() : configured;
+            excluded = PtaConfig.excludedNamespaces();
         } catch (RuntimeException exception) {
             LOGGER.warn("[pta] could not read the configured book list", exception);
             return List.of();
         }
 
-        Set<String> excluded = PtaConfig.excludedNamespaces();
         Set<ResourceLocation> seen = new LinkedHashSet<>();
         List<ResourceLocation> result = new ArrayList<>();
         for (ResourceLocation bookId : candidates) {

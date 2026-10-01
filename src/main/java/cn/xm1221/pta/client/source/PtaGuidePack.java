@@ -48,7 +48,8 @@ public final class PtaGuidePack implements PackResources {
     public PtaGuidePack() {
         Map<ResourceLocation, String> generated;
         try {
-            generated = PtaGuideDocuments.build();
+            generated = new LinkedHashMap<>(PtaGuideAssets.build());
+            generated.putAll(PtaGuideDocuments.build());
         } catch (Throwable throwable) {
             // A failure here happens while the game is assembling its resource packs, where an
             // exception would take the whole reload down. Serving nothing is the correct response:
@@ -59,7 +60,7 @@ public final class PtaGuidePack implements PackResources {
         this.documents = generated;
     }
 
-    /** How many documents this pack is serving, for diagnostics. */
+    /** How many resources this pack is serving, for diagnostics. */
     public int documentCount() {
         return this.documents.size();
     }

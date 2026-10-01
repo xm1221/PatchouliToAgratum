@@ -29,6 +29,9 @@ public final class PtaMod {
 
     public PtaMod(IEventBus modEventBus, ModContainer modContainer) {
         modContainer.registerConfig(net.neoforged.fml.config.ModConfig.Type.CLIENT, PtaConfig.SPEC);
+        PtaDataComponents.register(modEventBus);
+        PtaItems.register(modEventBus);
+        modEventBus.addListener(PtaItems::addToCreativeTab);
         LOGGER.info("Patchouli to Ageratum loading on {}", FMLEnvironment.dist);
     }
 }
