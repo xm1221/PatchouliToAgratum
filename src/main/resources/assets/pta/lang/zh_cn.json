@@ -1,5 +1,8 @@
 {
   "item.pta.guidebook": "帕秋莉导读",
   "item.pta.guidebook.hint": "右键：以藿香导读的形式阅读这本帕秋莉手册",
-  "item.pta.guidebook.unset": "未指定手册"
+  "item.pta.guidebook.unset": "未指定手册",
+  "commands.pta.export.done": "已导出 %s 个文件到 %s",
+  "commands.pta.export.failed": "导出到 %s 失败：%s",
+  "commands.pta.export.nothing": "当前没有镜像任何手册，没有可导出的内容"
 }

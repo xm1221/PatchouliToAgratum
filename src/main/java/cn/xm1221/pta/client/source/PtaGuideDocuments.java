@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -42,22 +43,45 @@ public final class PtaGuideDocuments {
      * @return document location to its UTF-8 text, empty when nothing is configured
      */
     public static Map<ResourceLocation, String> build() {
+        return buildFor(PtaBookList.effectiveBooks()).documents();
+    }
+
+    /**
+     * Builds the mirror documents of specific books, with each book's conversion report.
+     *
+     * <p>The export command uses this shape: it wants the report that belongs to the book it was
+     * asked for, not the log line a whole-run mirror would print.</p>
+     *
+     * @param books the books to mirror, in the order they should be generated
+     */
+    public static Build buildFor(List<ResourceLocation> books) {
         Map<ResourceLocation, String> documents = new LinkedHashMap<>();
+        Map<ResourceLocation, String> reports = new LinkedHashMap<>();
         BookSource source = new ModFileBookSource();
 
-        for (ResourceLocation bookId : PtaBookList.effectiveBooks()) {
+        for (ResourceLocation bookId : books) {
             try {
-                mirror(bookId, source, documents);
+                mirror(bookId, source, documents, reports);
             } catch (RuntimeException | IOException exception) {
                 // One broken book must not stop the rest, or break the reload.
                 LOGGER.error("[pta] failed to mirror Patchouli book {}", bookId, exception);
             }
         }
-        return documents;
+        return new Build(documents, reports);
+    }
+
+    /**
+     * What one generation run produced.
+     *
+     * @param documents document location to its UTF-8 text
+     * @param reports   book id to that book's conversion report, in Markdown
+     */
+    public record Build(Map<ResourceLocation, String> documents, Map<ResourceLocation, String> reports) {
     }
 
     private static void mirror(ResourceLocation bookId, BookSource source,
-                               Map<ResourceLocation, String> out) throws IOException {
+                               Map<ResourceLocation, String> out, Map<ResourceLocation, String> reports)
+            throws IOException {
         String namespace = bookId.getNamespace();
         String bookName = bookId.getPath();
 
@@ -85,6 +109,7 @@ public final class PtaGuideDocuments {
         LOGGER.info("[pta] mirroring {} ({} categories, {} entries): {} documents (languages: {})",
                 bookId, layout.categories().size(), layout.entries().size(), written,
                 String.join(", ", languages));
+        reports.put(bookId, merged.toMarkdown());
         if (!merged.isClean()) {
             LOGGER.info("[pta] conversion notes for {}:\n{}", bookId, merged.toMarkdown());
         }

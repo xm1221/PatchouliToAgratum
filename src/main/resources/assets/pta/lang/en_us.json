@@ -1,5 +1,8 @@
 {
   "item.pta.guidebook": "Patchouli Guide",
   "item.pta.guidebook.hint": "Right-click to read this Patchouli manual as an Ageratum guide",
-  "item.pta.guidebook.unset": "No book selected"
+  "item.pta.guidebook.unset": "No book selected",
+  "commands.pta.export.done": "Exported %s files to %s",
+  "commands.pta.export.failed": "Could not export to %s: %s",
+  "commands.pta.export.nothing": "No book is mirrored, so there is nothing to export"
 }

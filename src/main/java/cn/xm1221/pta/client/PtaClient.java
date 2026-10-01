@@ -2,11 +2,13 @@ package cn.xm1221.pta.client;
 
 import cn.xm1221.pta.PtaComponents;
 import cn.xm1221.pta.PtaMod;
+import cn.xm1221.pta.client.command.PtaExportCommand;
 import cn.xm1221.pta.client.source.PtaPackFinder;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.common.NeoForge;
 
 /**
  * Client-only entry point.
@@ -21,5 +23,8 @@ public final class PtaClient {
         // The mirrored guides are served as a resource pack rather than injected into Ageratum's
         // cache, so that every lookup Ageratum makes - not just its parsing scan - sees them.
         modEventBus.addListener(PtaPackFinder::onAddPackFinders);
+        // The export command is a client command: it writes the client's own mirror to the
+        // client's own disk, so it is registered on the client's dispatcher and nowhere else.
+        NeoForge.EVENT_BUS.addListener(PtaExportCommand::onRegisterClientCommands);
     }
 }
