@@ -53,12 +53,20 @@ public final class BookLayout {
         /**
          * The category's landing document.
          *
-         * <p>Capped at two directories, because Ageratum's sidebar lists a child directory only
-         * through its {@code index} document and never lists that child's own documents. Anything
-         * deeper would simply not be reachable.</p>
+         * <p>Capped at one directory, not two. Ageratum's sidebar renders a child directory's index
+         * in a separate pass that runs <i>after</i> the parent's own documents, so a nested chapter
+         * would always sit below every entry of its parent. Flattening it into the parent directory
+         * makes it an ordinary document there, which the sidebar sorts by front matter weight — and
+         * that is what lets a sub-chapter be listed before the parent's entries, which is how a
+         * reader expects a table of contents to read.</p>
          */
         public String indexPath() {
-            return limitDepth(this.path + "/index", 2);
+            return limitDepth(this.path + "/index", 1);
+        }
+
+        /** Whether this category sits inside another one. */
+        public boolean isNested() {
+            return this.path.indexOf('/') >= 0;
         }
     }
 

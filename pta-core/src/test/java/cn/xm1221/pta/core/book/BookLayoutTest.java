@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -56,7 +57,7 @@ class BookLayoutTest {
         BookLayout.Category greatSpells = layout.categories().get("hexcasting:patterns/great_spells");
         assertNotNull(greatSpells);
         assertEquals("patterns/great_spells", greatSpells.directory());
-        assertEquals("patterns/great_spells/index", greatSpells.indexPath());
+        assertEquals("patterns/great_spells__index", greatSpells.indexPath());
         assertEquals("hexcasting:patterns", greatSpells.parent());
     }
 
@@ -86,7 +87,7 @@ class BookLayoutTest {
         assertEquals("items/amethyst", layout.resolveTarget("items/amethyst"));
         assertEquals("items/amethyst", layout.resolveTarget("hexcasting:items/amethyst"));
         assertEquals("items/index", layout.resolveTarget("hexcasting:items"));
-        assertEquals("patterns/great_spells/index", layout.resolveTarget("patterns/great_spells"));
+        assertEquals("patterns/great_spells__index", layout.resolveTarget("patterns/great_spells"));
         assertNull(layout.resolveTarget("no/such/entry"));
         assertNull(layout.resolveTarget(""));
     }
@@ -186,10 +187,12 @@ class BookLayoutTest {
         assertEquals("patterns/great_spells__altiora", altiora.documentPath());
         assertEquals("patterns", BookLayout.directoryOf(altiora.documentPath()));
 
-        // The nested category's own index stays a child directory, which is exactly what the
-        // sidebar does render.
-        assertEquals("patterns/great_spells/index",
+        // A nested chapter's index also flattens, so that it becomes an ordinary document in the
+        // parent directory and can be ordered against the parent's entries.
+        assertEquals("patterns/great_spells__index",
                 layout.categories().get("hexcasting:patterns/great_spells").indexPath());
+        assertTrue(layout.categories().get("hexcasting:patterns/great_spells").isNested());
+        assertFalse(layout.categories().get("hexcasting:patterns").isNested());
 
         // Nothing may be deeper than one directory, or it cannot be navigated to.
         for (BookLayout.Entry entry : layout.entries().values()) {

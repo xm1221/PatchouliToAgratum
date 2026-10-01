@@ -9,9 +9,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -256,9 +259,51 @@ class BookConverterTest {
         // A nested chapter's entries live in the parent directory, so the link climbs out of the
         // chapter's own directory first. Every such link is verified against the document map by
         // everyGeneratedLinkTargetsAGeneratedDocument.
-        String greatSpells = output.documents().get("patterns/great_spells/index");
+        // The nested chapter now lives in the parent directory alongside its own entries, so the
+        // link is direct rather than climbing out of a subdirectory.
+        String greatSpells = output.documents().get("patterns/great_spells__index");
         assertNotNull(greatSpells);
-        assertTrue(greatSpells.contains("](../great_spells__altiora)"), greatSpells);
+        assertTrue(greatSpells.contains("](great_spells__altiora)"), greatSpells);
+    }
+
+    /**
+     * Ageratum renders a child directory's index in a pass that runs after the parent's own
+     * documents, so a sub-chapter would always end up below every entry of its parent. Flattening
+     * the nested index into the parent directory turns its position into front matter weight.
+     */
+    @Test
+    void subChaptersSortBeforeTheirParentsEntries() throws IOException {
+        BookConverter.Output output = convertHexmod();
+
+        // spells has sortnum 0, great_spells has sortnum 1; both stay negative so they precede the
+        // parent's unweighted entries, and their order still follows Patchouli's sortnum.
+        assertTrue(output.documents().get("patterns/spells__index").contains("weight: -1000"),
+                output.documents().get("patterns/spells__index"));
+        assertTrue(output.documents().get("patterns/great_spells__index").contains("weight: -999"),
+                output.documents().get("patterns/great_spells__index"));
+        assertFalse(output.documents().get("patterns/index").contains("weight:"),
+                "a root chapter's position is not decided by weight");
+
+        // Reproduce Ageratum's ordering exactly: weight, then file name.
+        List<String> sidebar = output.documents().entrySet().stream()
+                .filter(entry -> BookLayout.directoryOf(entry.getKey()).equals("patterns"))
+                .filter(entry -> !entry.getKey().equals("patterns/index"))
+                .sorted(Comparator
+                        .comparingInt((Map.Entry<String, String> entry) -> weightOf(entry.getValue()))
+                        .thenComparing(Map.Entry::getKey))
+                .map(Map.Entry::getKey)
+                .toList();
+
+        assertEquals("patterns/spells__index", sidebar.get(0), sidebar.toString());
+        assertEquals("patterns/great_spells__index", sidebar.get(1), sidebar.toString());
+        // ...and the parent's own entries follow.
+        assertEquals("patterns/advanced_escaping", sidebar.get(2), sidebar.toString());
+    }
+
+    /** The sidebar's sort key, read back out of the generated front matter. */
+    private static int weightOf(String document) {
+        Matcher matcher = Pattern.compile("(?m)^weight:\\s*(-?\\d+)$").matcher(document);
+        return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
     }
 
     @Test

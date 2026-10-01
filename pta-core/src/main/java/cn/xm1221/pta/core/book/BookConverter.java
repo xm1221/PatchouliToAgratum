@@ -32,6 +32,16 @@ public final class BookConverter {
     public static final String ROOT_DOCUMENT = "index";
 
     /**
+     * Front matter weight given to a nested chapter's index.
+     *
+     * <p>Ageratum's sidebar sorts a directory's documents by front matter weight, then by file name,
+     * and unweighted documents sit at 0. So a negative weight is what puts sub-chapters above the
+     * entries of their parent, and the category's own {@code sortnum} is added back so several
+     * sub-chapters keep the order Patchouli gives them.</p>
+     */
+    private static final int NESTED_CHAPTER_WEIGHT = -1000;
+
+    /**
      * The generated documents.
      *
      * @param documents document path without {@code .md} to the file's full text
@@ -94,7 +104,7 @@ public final class BookConverter {
         String landing = resolve(layout, lang, layout.landingTextKey(), texts.report());
 
         StringBuilder out = new StringBuilder();
-        out.append(frontMatter(name, null, null, false));
+        out.append(frontMatter(name, null, null, false, null));
         out.append("# ").append(name).append('\n');
 
         if (!landing.isBlank()) {
@@ -128,7 +138,7 @@ public final class BookConverter {
                 texts.report());
 
         StringBuilder out = new StringBuilder();
-        out.append(frontMatter(name, category.icon(), null, category.secret()));
+        out.append(frontMatter(name, category.icon(), null, category.secret(), chapterWeight(category)));
         out.append("# ").append(name).append("\n");
         if (!description.isBlank()) {
             out.append('\n')
@@ -188,7 +198,7 @@ public final class BookConverter {
         }
 
         StringBuilder out = new StringBuilder();
-        out.append(frontMatter(name, entry.icon(), entry.advancement(), entry.secret()));
+        out.append(frontMatter(name, entry.icon(), entry.advancement(), entry.secret(), null));
         out.append("# ").append(name).append('\n');
         if (body.length() > 0) {
             out.append('\n').append(body);
@@ -239,14 +249,29 @@ public final class BookConverter {
     // -------------------------------------------------------------------- front matter
 
     /**
+     * The sidebar weight for a category's index.
+     *
+     * @return a negative weight for a nested chapter, so it precedes its parent's entries, or
+     *         {@code null} for a root chapter, whose position is decided elsewhere
+     */
+    private static Integer chapterWeight(BookLayout.Category category) {
+        if (!category.isNested()) {
+            return null;
+        }
+        return NESTED_CHAPTER_WEIGHT + Math.min(category.sortnum(), 999);
+    }
+
+    /**
      * Builds the YAML front matter block.
      *
      * <p>{@code items} is the binding that gives Ageratum's "ponder" behaviour for free, so an
      * entry whose icon is an item becomes reachable by holding the ponder key over that item — the
      * closest equivalent Patchouli's entry icon has.</p>
+     *
+     * @param weight sidebar ordering, or {@code null} to leave the document at the default
      */
     private static String frontMatter(String title, String icon, String advancement,
-                                      boolean secret) {
+                                      boolean secret, Integer weight) {
         StringBuilder out = new StringBuilder();
         out.append("---\n");
         out.append("title: \"").append(escapeYaml(title)).append("\"\n");
@@ -259,6 +284,9 @@ public final class BookConverter {
         }
         if (secret) {
             out.append("pta_secret: true\n");
+        }
+        if (weight != null) {
+            out.append("weight: ").append(weight).append('\n');
         }
         out.append("---\n\n");
         return out.toString();
