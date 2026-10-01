@@ -20,7 +20,7 @@ there; without it, it is not).
 
 While the game assembles its resource packs, the mod **reads** every Patchouli book named in its
 config, converts it into Ageratum guide documents, and serves them from a **virtual resource pack**
-(nothing is written to disk, it is not a data pack, and no resource reload is needed):
+(nothing is written to disk, and no resource reload is needed):
 
 ```
 Patchouli book (inside some other mod's jar)
@@ -45,6 +45,9 @@ Two design lines run through all of it:
 * **What can be converted faithfully becomes native Markdown.** Prose (`patchouli:text` / `link`,
   `$(...)` macros, glyphs), recipes, item displays, images and entities all become Ageratum's own
   markup — selectable, searchable, with links that navigate — instead of inert pictures.
+
+The same mechanism, pointed at **server data** instead of resources, carries one pair of crafting
+recipes per mirrored book: the Patchouli book into its guide, and the guide back into the book.
 
 ## 2. Installing and using it
 
@@ -79,6 +82,20 @@ registered.)
   texture is that book's guide texture, and using it opens that guide.
 * **Without** the component it is an Ageratum guidebook itself: Ageratum's name and texture, and
   using it does nothing.
+
+**Crafting**: each mirrored book also gets a pair of recipes, written while the game loads because
+the books are only known then.
+
+* The Patchouli book becomes the `pta:guidebook` for that book, and that guide becomes the
+  Patchouli book back.
+* Both are shapeless, so the one item can go anywhere in the grid.
+* Both name the book through a component. Patchouli hands every book out as
+  `patchouli:guide_book` carrying `patchouli:book`, and the guides work the same way, so an
+  ingredient that named only the item would match every book in the pack.
+* Each recipe comes with the advancement that puts it in the recipe book once you hold the item
+  being converted (Patchouli's book, or the guide).
+* A book that Patchouli gives a `custom_book_item` is the one case this does not cover, because
+  its book is not `patchouli:guide_book`: only the direction out of the guide applies to it.
 
 **Commands** (both client-side):
 

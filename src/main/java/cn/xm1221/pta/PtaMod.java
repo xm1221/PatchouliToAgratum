@@ -1,5 +1,6 @@
 package cn.xm1221.pta;
 
+import cn.xm1221.pta.recipe.PtaRecipePack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -34,6 +35,9 @@ public final class PtaMod {
         PtaDataComponents.register(modEventBus);
         PtaItems.register(modEventBus);
         modEventBus.addListener(PtaItems::addToCreativeTab);
+        // The conversion recipes are server data, so they are served from here rather than from the
+        // client entry point: a dedicated server has to hand them out too.
+        modEventBus.addListener(PtaRecipePack::onAddPackFinders);
         LOGGER.info("Patchouli to Ageratum loading on {}", FMLEnvironment.dist);
     }
 }
