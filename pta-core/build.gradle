@@ -14,8 +14,8 @@ repositories {
 }
 
 dependencies {
-    // JSON5 (Patchouli language files are nested JSON5 with comments and bare keys).
-    implementation 'org.json:json:20240303'
+    // Deliberately none: the JSON5 reader is hand written precisely because off-the-shelf
+    // parsers reject the hand-edited language files this module has to read.
 
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
