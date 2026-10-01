@@ -37,7 +37,9 @@ public final class PtaConfig {
                 "Patchouli books to mirror into Ageratum guides, as namespace:book.",
                 "Use * to mirror every book Patchouli can find.",
                 "pta:spike is this mod's own throwaway book, listed so the mirroring can be",
-                "exercised without installing anything else. Remove it from the list to hide it."
+                "exercised without installing anything else. Remove it from the list to hide it.",
+                "Changing this takes effect on the next game start: the guides are generated",
+                "while the game assembles its resource packs."
         ).push("books");
         BOOKS = builder
                 .comment("One entry per book, e.g. hexcasting:thehexbook")
