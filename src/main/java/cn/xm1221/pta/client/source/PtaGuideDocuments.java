@@ -1,6 +1,6 @@
 package cn.xm1221.pta.client.source;
 
-import cn.xm1221.pta.PtaConfig;
+import cn.xm1221.pta.PtaBookList;
 import cn.xm1221.pta.core.book.BookConverter;
 import cn.xm1221.pta.core.book.BookLayout;
 import cn.xm1221.pta.core.book.BookSource;
@@ -9,20 +9,14 @@ import cn.xm1221.pta.core.report.ConversionReport;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.fml.ModList;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Stream;
 
 /**
  * Generates the Ageratum guide documents for every configured Patchouli book.
@@ -51,15 +45,7 @@ public final class PtaGuideDocuments {
         Map<ResourceLocation, String> documents = new LinkedHashMap<>();
         BookSource source = new ModFileBookSource();
 
-        List<ResourceLocation> books;
-        try {
-            books = configuredBooks();
-        } catch (RuntimeException exception) {
-            LOGGER.warn("[pta] could not read the configured book list", exception);
-            return documents;
-        }
-
-        for (ResourceLocation bookId : books) {
+        for (ResourceLocation bookId : PtaBookList.effectiveBooks()) {
             try {
                 mirror(bookId, source, documents);
             } catch (RuntimeException | IOException exception) {
@@ -125,57 +111,13 @@ public final class PtaGuideDocuments {
         return languages;
     }
 
-    private static List<ResourceLocation> configuredBooks() {
-        List<ResourceLocation> configured = PtaConfig.books();
-        return configured == null ? discoverBooks() : configured;
-    }
-
-    /**
-     * Finds every book Patchouli could load, for the {@code *} configuration.
-     */
-    private static List<ResourceLocation> discoverBooks() {
-        List<ResourceLocation> found = new ArrayList<>();
-        for (var info : ModList.get().getMods()) {
-            String namespace = info.getModId();
-            Path root = modRoot(namespace);
-            if (root == null) {
-                continue;
-            }
-            Path books = root.resolve("data/" + namespace + "/" + BookSource.NAMESPACE_BOOKS);
-            if (!Files.isDirectory(books)) {
-                continue;
-            }
-            try (Stream<Path> entries = Files.list(books)) {
-                entries.filter(Files::isDirectory)
-                        .map(path -> path.getFileName().toString())
-                        .map(name -> ResourceLocation.fromNamespaceAndPath(namespace, name))
-                        .forEach(found::add);
-            } catch (IOException exception) {
-                LOGGER.debug("[pta] could not list books of {}", namespace, exception);
-            }
-        }
-        found.sort((a, b) -> a.toString().compareTo(b.toString()));
-        return found;
-    }
-
-    private static Path modRoot(String namespace) {
-        var modFileInfo = ModList.get().getModFileById(namespace);
-        if (modFileInfo == null) {
-            return null;
-        }
-        try {
-            return modFileInfo.getFile().getSecureJar().getRootPath();
-        } catch (RuntimeException exception) {
-            return null;
-        }
-    }
-
     /**
      * Folds one document set's findings into the running total.
      */
     private static void mergeReports(ConversionReport into, ConversionReport from) {
         from.droppedAnchors().forEach((key, count) -> repeat(count, () -> into.anchor(key)));
         from.hostedPageTypes().forEach((key, count) -> repeat(count, () -> into.hostedPageType(key)));
+        from.multiRecipePages().forEach((key, count) -> repeat(count, () -> into.multiRecipe(key)));
         from.unknownCommands().forEach((key, count) -> repeat(count, () -> into.unknownCommand(key)));
         from.unrenderedTextFields().forEach((key, count) -> repeat(count, () -> into.unrenderedText(key)));
         repeat(from.droppedUnderlines(), into::underline);

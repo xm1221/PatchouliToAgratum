@@ -25,12 +25,18 @@ public final class PageTypeRegistry {
     /**
      * A registry with the built-in renderers.
      *
-     * <p>Currently: text and link pages become Markdown, everything else is hosted.</p>
+     * <p>Currently: text and link pages become Markdown, every recipe page becomes Ageratum's
+     * native recipe component, and everything else is hosted.</p>
      */
     public static PageTypeRegistry standard() {
         PageTypeRegistry registry = new PageTypeRegistry();
         registry.register("patchouli:text", new TextPageRenderer());
         registry.register("patchouli:link", new LinkPageRenderer());
+        PageRenderer recipes = new RecipePageRenderer();
+        for (String type : RecipePageRenderer.TYPES) {
+            registry.register(type, recipes);
+        }
+        registry.register(MultiRecipePageRenderer.TYPE, new MultiRecipePageRenderer());
         registry.fallback(new HostPageRenderer());
         return registry;
     }

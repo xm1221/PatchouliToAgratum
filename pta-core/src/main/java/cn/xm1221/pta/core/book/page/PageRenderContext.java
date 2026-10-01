@@ -4,6 +4,8 @@ import cn.xm1221.pta.core.book.BookLayout;
 import cn.xm1221.pta.core.book.BookTextConverter;
 import cn.xm1221.pta.core.report.ConversionReport;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -78,6 +80,28 @@ public final class PageRenderContext {
     public String raw(String field) {
         Object value = this.page.get(field);
         return value instanceof String text ? text : null;
+    }
+
+    /**
+     * A raw field value that holds a list of strings.
+     *
+     * <p>Patchouli pages such as Hex Casting's {@code crafting_multi} carry a list of ids rather
+     * than a single one.</p>
+     *
+     * @return the non-blank entries, in order; empty when the field is absent or not a list
+     */
+    public List<String> rawList(String field) {
+        Object value = this.page.get(field);
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>(list.size());
+        for (Object element : list) {
+            if (element instanceof String text && !text.isBlank()) {
+                result.add(text.trim());
+            }
+        }
+        return result;
     }
 
     /**

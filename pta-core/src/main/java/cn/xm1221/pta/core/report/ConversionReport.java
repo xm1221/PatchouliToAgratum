@@ -19,6 +19,7 @@ public final class ConversionReport {
     private final Map<String, Integer> unknownCommands = new TreeMap<>();
     private final Map<String, Integer> hostedPageTypes = new TreeMap<>();
     private final Map<String, Integer> unrenderedTextFields = new TreeMap<>();
+    private final Map<String, Integer> multiRecipePages = new TreeMap<>();
 
     private int documents;
     private int droppedUnderlines;
@@ -67,6 +68,19 @@ public final class ConversionReport {
         bump(this.unrenderedTextFields, key);
     }
 
+    /**
+     * A page that showed one recipe with merged ingredient slots had to be expanded into one
+     * recipe per variant.
+     *
+     * <p>Nothing is lost — every variant is present — but the presentation differs from Patchouli's,
+     * so it is worth surfacing.</p>
+     *
+     * @param where the page type and document the expansion happened in
+     */
+    public void multiRecipe(String where) {
+        bump(this.multiRecipePages, where);
+    }
+
     public int documents() {
         return this.documents;
     }
@@ -85,6 +99,11 @@ public final class ConversionReport {
 
     public Map<String, Integer> unrenderedTextFields() {
         return frozen(this.unrenderedTextFields);
+    }
+
+    /** Pages whose merged-recipe display was expanded into one recipe per variant. */
+    public Map<String, Integer> multiRecipePages() {
+        return frozen(this.multiRecipePages);
     }
 
     /**
@@ -111,6 +130,7 @@ public final class ConversionReport {
                 && this.unknownCommands.isEmpty()
                 && this.hostedPageTypes.isEmpty()
                 && this.unrenderedTextFields.isEmpty()
+                && this.multiRecipePages.isEmpty()
                 && this.droppedUnderlines == 0
                 && this.droppedPlayerNames == 0;
     }
@@ -127,6 +147,7 @@ public final class ConversionReport {
 
         appendCounts(out, "Dropped anchors", this.droppedAnchors);
         appendCounts(out, "Page types rendered by Patchouli", this.hostedPageTypes);
+        appendCounts(out, "Merged recipes expanded per variant", this.multiRecipePages);
         appendCounts(out, "Unknown commands", this.unknownCommands);
         appendCounts(out, "Unresolved text keys", this.unrenderedTextFields);
 
@@ -160,6 +181,7 @@ public final class ConversionReport {
         Map<String, Integer> snapshot = new LinkedHashMap<>();
         snapshot.putAll(this.droppedAnchors);
         snapshot.putAll(this.hostedPageTypes);
+        snapshot.putAll(this.multiRecipePages);
         snapshot.putAll(this.unknownCommands);
         snapshot.putAll(this.unrenderedTextFields);
         return snapshot;
