@@ -1,6 +1,7 @@
 package cn.xm1221.pta;
 
 import cn.xm1221.pta.client.component.MDHexPatternComponent;
+import cn.xm1221.pta.client.component.MDLockedComponent;
 import cn.xm1221.pta.client.component.MDPatchouliPageComponent;
 import dev.anvilcraft.resource.ageratum.client.feat.markdown.MDExtensionComponentFactory;
 import dev.anvilcraft.resource.ageratum.client.registries.AgeratumRegistries;
@@ -38,6 +39,19 @@ public final class PtaComponents {
      */
     public static final DeferredHolder<MDExtensionComponentFactory, MDExtensionComponentFactory> PATTERN =
             EXTENSION_COMPONENTS.register("pattern", () -> MDHexPatternComponent::parse);
+
+    /**
+     * Shows a document body only once the advancement it names is earned.
+     *
+     * <pre>{@code <pta:locked advancements="minecraft:story/root" unlock="any" secret="true">
+     *   ...
+     * </pta:locked>}</pre>
+     *
+     * <p>Whether an advancement is earned is per player and changes while the game runs, so a
+     * mirrored book's locks are carried into the document and decided while it is drawn.</p>
+     */
+    public static final DeferredHolder<MDExtensionComponentFactory, MDExtensionComponentFactory> LOCKED =
+            EXTENSION_COMPONENTS.register("locked", () -> MDLockedComponent::parse);
 
     private PtaComponents() {
     }

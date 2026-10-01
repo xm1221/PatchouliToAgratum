@@ -3,10 +3,13 @@ package cn.xm1221.pta.core.book;
 import cn.xm1221.pta.core.lang.Json5;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * The structure of one Patchouli book, and the mapping from Patchouli ids onto Ageratum
@@ -236,6 +239,113 @@ public final class BookLayout {
 
     public Map<String, Entry> entries() {
         return this.entries;
+    }
+
+    // ------------------------------------------------------------------- locking
+
+    /**
+     * Whether Patchouli would show this chapter as locked.
+     *
+     * <p>A category has no {@code advancement} of its own — the field does not exist in Patchouli's
+     * category format. A chapter instead counts as locked while it holds something and every entry
+     * and every sub-chapter in it is locked, which is what
+     * {@code BookCategory.updateLockStatus} computes. Mirroring the rule rather than inventing a
+     * per-chapter advancement keeps the guide's chapters as reachable as the original book's.</p>
+     *
+     * <p>Patchouli's own {@code advancementsEnabled} switch is deliberately not consulted: it comes
+     * from Patchouli's configuration rather than from the book, and a guide should be locked
+     * according to what the book declares.</p>
+     */
+    public boolean isCategoryLocked(String categoryId) {
+        return isCategoryLocked(categoryId, new LinkedHashMap<>());
+    }
+
+    private boolean isCategoryLocked(String categoryId, Map<String, Boolean> memo) {
+        Boolean known = memo.get(categoryId);
+        if (known != null) {
+            return known;
+        }
+        Category category = this.categories.get(categoryId);
+        if (category == null) {
+            return false;
+        }
+
+        List<Category> children = childCategories(categoryId);
+        List<Entry> entries = categoryEntries(categoryId);
+        // Patchouli starts from "locked" only if the category holds anything at all, so an empty
+        // chapter never locks — and, being empty, never locks its parent either.
+        boolean locked = !children.isEmpty() || !entries.isEmpty();
+        for (int index = 0; locked && index < children.size(); index++) {
+            locked = isCategoryLocked(children.get(index).id(), memo);
+        }
+        for (int index = 0; locked && index < entries.size(); index++) {
+            locked = isEntryLocked(entries.get(index));
+        }
+
+        memo.put(categoryId, locked);
+        return locked;
+    }
+
+    /** Whether Patchouli would call this entry locked: it names an advancement. */
+    public static boolean isEntryLocked(Entry entry) {
+        return entry.advancement() != null && !entry.advancement().isBlank();
+    }
+
+    /**
+     * The advancements declared by every entry inside a chapter, including its sub-chapters.
+     *
+     * <p>A locked chapter unlocks as soon as any of them is earned, so this is what a chapter-level
+     * lock has to ask about. Order follows the layout, and duplicates are folded away: the same
+     * advancement often locks several entries of the same chapter.</p>
+     */
+    public List<String> categoryAdvancements(String categoryId) {
+        Set<String> collected = new LinkedHashSet<>();
+        collectAdvancements(categoryId, collected, new HashSet<>());
+        return List.copyOf(collected);
+    }
+
+    private void collectAdvancements(String categoryId, Set<String> collected, Set<String> seen) {
+        if (!seen.add(categoryId)) {
+            return;
+        }
+        for (Entry entry : categoryEntries(categoryId)) {
+            if (isEntryLocked(entry)) {
+                collected.add(entry.advancement().trim());
+            }
+        }
+        for (Category child : childCategories(categoryId)) {
+            collectAdvancements(child.id(), collected, seen);
+        }
+    }
+
+    /** The entries declaring this chapter directly. */
+    public List<Entry> categoryEntries(String categoryId) {
+        List<Entry> found = new ArrayList<>();
+        for (Entry entry : this.entries.values()) {
+            if (categoryId.equals(qualify(entry.category()))) {
+                found.add(entry);
+            }
+        }
+        return found;
+    }
+
+    /** The chapters declaring this chapter as their parent. */
+    public List<Category> childCategories(String categoryId) {
+        List<Category> found = new ArrayList<>();
+        for (Category category : this.categories.values()) {
+            if (categoryId.equals(qualify(category.parent()))) {
+                found.add(category);
+            }
+        }
+        return found;
+    }
+
+    /** A category id as written in a {@code parent} field, with this book's namespace added. */
+    private String qualify(String id) {
+        if (id == null || id.isBlank()) {
+            return null;
+        }
+        return id.contains(":") ? id : this.namespace + ":" + id;
     }
 
     /**

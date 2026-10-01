@@ -137,11 +137,10 @@ public final class BookConverter {
         String description = resolve(layout, lang, stringField(category.json(), "description"),
                 texts.report());
 
-        StringBuilder out = new StringBuilder();
-        out.append(frontMatter(name, null, category.secret(), chapterWeight(category)));
-        out.append("# ").append(name).append("\n");
+        StringBuilder document = new StringBuilder();
+        document.append("# ").append(name).append("\n");
         if (!description.isBlank()) {
-            out.append('\n')
+            document.append('\n')
                     .append(texts.convert(category.indexPath(), description))
                     .append('\n');
         }
@@ -162,9 +161,34 @@ public final class BookConverter {
                     .append(")\n");
         }
         if (contents.length() > 0) {
-            out.append('\n').append(contents);
+            document.append('\n').append(contents);
         }
+
+        StringBuilder out = new StringBuilder();
+        out.append(frontMatter(name, null, category.secret(), chapterWeight(category)));
+        out.append(chapterLock(layout, category, document.toString()));
         return out.toString();
+    }
+
+    /**
+     * Locks a chapter's index while the chapter holds nothing unlocked.
+     *
+     * <p>A chapter has no advancement of its own, so what it is waiting for is the advancements of
+     * the entries inside it — and, as in Patchouli, any one of them being earned opens the chapter.
+     * The list is the chapter's whole contents, so the lock also hides which entries it holds, which
+     * is exactly what Patchouli does not show for a locked chapter.</p>
+     */
+    private static String chapterLock(BookLayout layout, BookLayout.Category category, String document) {
+        if (!layout.isCategoryLocked(category.id())) {
+            return document;
+        }
+        List<String> advancements = layout.categoryAdvancements(category.id());
+        if (advancements.isEmpty()) {
+            // Unreachable: a locked chapter has locked entries, and a locked entry names an
+            // advancement. Guarded anyway, because an empty requirement would lock forever.
+            return document;
+        }
+        return locked(String.join(",", advancements), true, category.secret(), document);
     }
 
     private static String categoryTitle(BookLayout layout, BookLayout.Category category,
@@ -199,11 +223,60 @@ public final class BookConverter {
 
         StringBuilder out = new StringBuilder();
         out.append(frontMatter(name, entry.advancement(), entry.secret(), null));
-        out.append("# ").append(name).append('\n');
-        if (body.length() > 0) {
-            out.append('\n').append(body);
-        }
+        out.append(entryLock(entry, document(name, body)));
         return out.toString();
+    }
+
+    /** The entry's body: its title, then its pages. */
+    private static String document(String name, StringBuilder body) {
+        StringBuilder document = new StringBuilder();
+        document.append("# ").append(name).append('\n');
+        if (body.length() > 0) {
+            document.append('\n').append(body);
+        }
+        return document.toString();
+    }
+
+    /** Locks an entry's body behind the advancement the book declared for it. */
+    private static String entryLock(BookLayout.Entry entry, String document) {
+        if (!BookLayout.isEntryLocked(entry)) {
+            return document;
+        }
+        return locked(entry.advancement().trim(), false, entry.secret(), document);
+    }
+
+    /**
+     * Wraps a document body in a lock the client checks while drawing it.
+     *
+     * <p>Whether an advancement is earned is per player and changes while the game runs, so it
+     * cannot be decided here: the document can only carry the requirement. The client decides, and
+     * {@code <pta:locked>} — an Ageratum component this mod contributes — then draws either the body
+     * or a notice saying it is not unlocked yet.</p>
+     *
+     * <p>The front matter keeps {@code pta_lock} as well, so an exported or inspected document says
+     * what it is waiting for; the component is what actually enforces it.</p>
+     *
+     * @param advancements the advancement ids that unlock the body, comma separated
+     * @param unlockAny    whether any one of them is enough, as a locked chapter needs
+     * @param secret       whether the requirement itself is a secret, as Patchouli treats it
+     */
+    private static String locked(String advancements, boolean unlockAny, boolean secret,
+                                 String document) {
+        StringBuilder out = new StringBuilder();
+        out.append("<pta:locked advancements=\"").append(attribute(advancements)).append('"');
+        if (unlockAny) {
+            out.append(" unlock=\"any\"");
+        }
+        if (secret) {
+            out.append(" secret=\"true\"");
+        }
+        out.append(">\n\n").append(document).append("\n</pta:locked>\n");
+        return out.toString();
+    }
+
+    /** Keeps a requirement from ending the tag it is written into. */
+    private static String attribute(String value) {
+        return value.replace("\"", "").replace("\n", " ").trim();
     }
 
     /**
