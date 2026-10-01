@@ -1,5 +1,6 @@
 package cn.xm1221.pta.client.component;
 
+import cn.xm1221.pta.PtaMod;
 import cn.xm1221.pta.client.render.HexPatternBridge;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.anvilcraft.resource.ageratum.client.feat.markdown.MDExtensionContext;
@@ -140,6 +141,12 @@ public class MDHexPatternComponent extends MDComponent {
             return true;
         } catch (RuntimeException exception) {
             this.error = exception.getMessage();
+            // The guide shows this as text, and text is not something anyone can hand over when
+            // asking why a pattern is missing — so the stack trace goes to the log as well, with
+            // what the page asked for. Tried once: `error` above keeps this out of later frames.
+            PtaMod.LOGGER.warn("[pta] cannot draw the pattern of {}: {}",
+                    this.opId != null ? "op " + this.opId : "patterns " + this.patterns,
+                    this.error, exception);
             return false;
         }
     }
