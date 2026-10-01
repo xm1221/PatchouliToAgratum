@@ -106,8 +106,9 @@ mod 侧 24 个 Java 文件里，按依赖统计：
 
 ### 镜像另一本书（轴 D）
 
-**这条已经零成本**：`config/pta-client.toml` 里 `books.mirror = ["你的命名空间:书id"]`（或 `*`），
-重启即生效。缺什么会写在导出报告里：
+**这条已经零成本**：把书放进任何模组的 `data/<命名空间>/patchouli_books/<书id>/`，
+启动就会被发现并镜像（`config/pta-common.toml` 的 `exclude.mods` 是唯一的减法）。
+缺什么会写在导出报告里：
 
 * 页面文字缺 lang key → 报告里列出来（真书验证过：HexMod 的 557 个 page key 逐字无损）；
 * 遇到没有 Renderer 的页型 → 走托管，报告里能看到托管清单；想转成原生 Markdown 就补一个

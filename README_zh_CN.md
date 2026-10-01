@@ -44,16 +44,25 @@ Patchouli 书（其它 mod 的 jar 里）
 
 装到客户端（`mods/` 里放 `pta`、`patchouli`、`ageratum`），启动即可。
 
-**配置**：`config/pta-client.toml`
+**配置**：`config/pta-common.toml`
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `books.mirror` | `["hexcasting:thehexbook", "pta:spike"]` | 要镜像的书，`namespace:book`；写 `*` 表示发现到的全都要 |
-| `exclude.mods` | `[]` | 按**模组命名空间**排除，从白名单结果里减掉。例：`["hexcasting"]` |
+| `exclude.mods` | `[]` | 按**模组命名空间**排除，这些模组的书一律不生成。例：`["hexcasting"]` |
 
-> 白名单命中但被黑名单排除 → 记一条日志跳过（方便排查「明明写了却没有」）。
+凡是找到的 Patchouli 手册都生成——「镜像一本书」本来就是这个意思，所以只剩排除这一个开关。
+这份配置是 **common** 而不是客户端侧，是有意的：同一份名单既决定生成哪些导读，也决定创造模式
+里有哪些指南书物品，而物品是**两侧都要注册**的。（按世界存档的 server 配置做不到这点：
+物品注册时它还不存在。）
+
+> 被排除掉的书会记一条日志，方便排查「这本书怎么没有」。
 > 改配置**下次启动**生效：导读是在游戏组装资源包时生成的。
-> `pta:spike` 是本 mod 自带的练手小书，用它在不装任何其它 mod 的情况下验证镜像流程。
+> 找书是在模组自己的文件里找：`data/<命名空间>/patchouli_books/<书id>/`。之所以直接读文件，
+> 是因为导读是在游戏组装资源包的过程中生成的——那时 Patchouli 自己的书单还不存在。因此只存在于
+> 数据包里的书找不到，以前也找不到：导读是从书**自己的文件**生成的，不是从 Patchouli 已加载的
+> 副本里读的。
+> `pta:spike` 是本 mod 自带的练手小书，用它在不装任何其它 mod 的情况下验证镜像流程；
+> 它和别的书一样会被镜像，不想要就把 `pta` 排除掉。
 
 **物品**：`pta:guidebook`（创造页「工具与实用物品」里每本镜像书一个）。
 
@@ -84,7 +93,7 @@ Patchouli 书（其它 mod 的 jar 里）
 | `image` | 原生 Markdown 图片 |
 | `entity` | `<entity id="…"/>` + 文案 |
 | `empty` | 什么都不输出 |
-| HexCasting 图案页（`hexcasting:pattern` / `manual_pattern` / `manual_pattern_nosig`） | 标题、Input/Output、正文转原生 Markdown；六边形由 `<pta:pattern>` 画（版式：标题在上、图案居中、IO 在图案正下方、正文在后） |
+| HexCasting 图案页（`hexcasting:pattern` / `manual_pattern` / `manual_pattern_nosig`） | 标题、Input/Output、正文转原生 Markdown；六边形由 `<pta:pattern>` 画（版式：标题在上、图案居中、IO 在图案正下方、正文在后）——页自带 `patterns` 的（那些没有自己形状的操作：数字之精思、向量常量、掩码）就照页上写的画，图案才不会丢 |
 | 其余（含别的 mod 的模板页） | `<pta:page book="…" entry="…" page="…"/>` —— 在藿香文档里画**真实的那一页** |
 
 brainsweep 是藿香唯一画不了的配方：它不是原版配方，`<recipe>` 没有对应工厂，所以按页面点名的

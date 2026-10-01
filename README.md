@@ -50,19 +50,28 @@ Two design lines run through all of it:
 
 Install it on the client (put `pta`, `patchouli` and `ageratum` in `mods/`) and start the game.
 
-**Configuration**: `config/pta-client.toml`
+**Configuration**: `config/pta-common.toml`
 
 | Key | Default | Meaning |
 |---|---|---|
-| `books.mirror` | `["hexcasting:thehexbook", "pta:spike"]` | books to mirror, as `namespace:book`; `*` means every book that was found |
-| `exclude.mods` | `[]` | excluded by **mod namespace**, subtracted from the whitelist. For example `["hexcasting"]` |
+| `exclude.mods` | `[]` | mod **namespaces** whose books are left alone. For example `["hexcasting"]` |
 
-> A book on the whitelist that the blacklist excludes is logged and skipped, so "I asked for it and
-> nothing happened" is answerable.
+Every Patchouli book found is mirrored — that is what "mirror a book" means — so exclusion is the
+only switch. The config is **common** rather than client-side on purpose: the same list decides
+which guides exist and which guide items the creative tab offers, and items are registered for both
+sides. (A per-world server config could not do this — it does not exist yet while items are being
+registered.)
+
+> An excluded mod's book is logged and skipped, so "why is that book missing" is answerable.
 > Configuration changes take effect on the **next start**: guides are generated while the game
 > assembles its resource packs.
+> Books are found in mods' own files, at `data/<namespace>/patchouli_books/<book>/`, because the
+> guides are generated while the game assembles its resource packs — before Patchouli's own book
+> list exists. A book that lives only in a datapack is therefore not found, and never was: the
+> guide is generated from the book's files, not from Patchouli's loaded copy.
 > `pta:spike` is a small practice book that ships with this mod, for exercising the mirroring
-> pipeline without installing anything else.
+> pipeline without installing anything else; it is mirrored like any other book, so exclude `pta`
+> to hide it.
 
 **Item**: `pta:guidebook` (one per mirrored book, in the "Tools & Utilities" creative tab).
 
@@ -96,7 +105,7 @@ had to lose something.
 | `image` | native Markdown image |
 | `entity` | `<entity id="…"/>` + prose |
 | `empty` | nothing at all |
-| Hex Casting pattern pages (`hexcasting:pattern` / `manual_pattern` / `manual_pattern_nosig`) | title, Input/Output and prose as native Markdown; the hexagon itself is drawn by `<pta:pattern>` (title on top, hexagon centred, Input/Output right under it, prose last) |
+| Hex Casting pattern pages (`hexcasting:pattern` / `manual_pattern` / `manual_pattern_nosig`) | title, Input/Output and prose as native Markdown; the hexagon itself is drawn by `<pta:pattern>` (title on top, hexagon centred, Input/Output right under it, prose last) — a page that carries its own patterns draws those, which is how the ops with no shape of their own (the number pattern, a vector constant, a mask) keep their picture |
 | everything else (including other mods' template pages) | `<pta:page book="…" entry="…" page="…"/>` — **that very page** is drawn inside the Ageratum document |
 
 Brainsweep is the one recipe Ageratum cannot draw for itself: it is not a vanilla recipe, so the

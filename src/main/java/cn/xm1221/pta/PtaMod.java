@@ -28,7 +28,9 @@ public final class PtaMod {
     public static final Logger LOGGER = LoggerFactory.getLogger("PatchouliToAgeratum");
 
     public PtaMod(IEventBus modEventBus, ModContainer modContainer) {
-        modContainer.registerConfig(net.neoforged.fml.config.ModConfig.Type.CLIENT, PtaConfig.SPEC);
+        // Common, not client: the same list decides which guides exist and which guide items the
+        // creative tab offers, and items are registered for both sides.
+        modContainer.registerConfig(net.neoforged.fml.config.ModConfig.Type.COMMON, PtaConfig.SPEC);
         PtaDataComponents.register(modEventBus);
         PtaItems.register(modEventBus);
         modEventBus.addListener(PtaItems::addToCreativeTab);
