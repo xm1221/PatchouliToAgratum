@@ -99,10 +99,10 @@ class HexPatternPageRendererTest {
         assertTrue(markdown.contains("Adds me, the caster, to the stack."), markdown);
         assertFalse(markdown.contains("hexcasting.action"), "the language key leaked: " + markdown);
 
-        // prose on the right of the pattern, not below it
-        assertTrue(markdown.contains("<row>"), markdown);
-        assertTrue(markdown.indexOf("<pta:pattern") < markdown.indexOf("---"), markdown);
-        assertTrue(markdown.indexOf("---") < markdown.indexOf("Adds me"), markdown);
+        // One column: the pattern's own band, then the prose. No row, because a row holding a
+        // paragraph wraps and would leave the pattern indented beside nothing.
+        assertFalse(markdown.contains("<row>"), markdown);
+        assertTrue(markdown.indexOf("</pta:pattern>") < markdown.indexOf("Adds me"), markdown);
     }
 
     /** An action with no book-flavoured name falls back to its casting name. */
@@ -223,7 +223,7 @@ class HexPatternPageRendererTest {
         assertTrue(report.hostedPageTypes().containsKey("hexcasting:pattern"), report.toMarkdown());
     }
 
-    /** A page with no prose still shows its pattern, just without a row around it. */
+    /** A page with no prose still shows its pattern, and nothing else. */
     @Test
     void aPatternPageWithoutProseIsJustThePattern() {
         BookLayout layout = hexmodBook();
@@ -234,7 +234,7 @@ class HexPatternPageRendererTest {
                 Map.of(), new BookTextConverter(layout, ConversionReport.empty())));
 
         assertFalse(markdown.contains("<row>"), markdown);
-        assertTrue(markdown.contains("<pta:pattern op=\"hexcasting:get_caster\"/>"), markdown);
+        assertTrue(markdown.endsWith("<pta:pattern op=\"hexcasting:get_caster\"/>"), markdown);
     }
 
     /**

@@ -26,13 +26,28 @@ import org.jetbrains.annotations.Nullable;
  * the rest of the page is unaffected.</p>
  *
  * <p>The signature is drawn by this component rather than as a sibling Markdown block so that it
- * lands directly under the hexagon: Ageratum's rows do not nest, so a two-column layout of
- * "pattern with its signature" beside "prose" has to be one component wide on the left.</p>
+ * lands directly under the hexagon: Ageratum centres a component by letting it measure the line it
+ * was given, and a row of "pattern with its signature" beside "prose" would wrap, because a
+ * paragraph asks for the whole line.</p>
  */
 public class MDHexPatternComponent extends MDComponent {
     /** The box Hex Casting lays a single pattern out in, taken from its own component. */
     private static final int PATTERN_WIDTH = 116;
     private static final int PATTERN_HEIGHT = 64;
+
+    /**
+     * How far below the component's own origin Hex Casting draws that box.
+     *
+     * <p>Its component is written for Patchouli's pattern template, which leaves room above the
+     * hexagon, and it draws at {@code translate(x, cellHeight * row + 16, 100)}. Drawing through it
+     * without accounting for that puts the hexagon 16px low — low enough to sit on top of the
+     * signature drawn under the box — so the pose is pulled back up by the same amount and the box
+     * starts at this component's top edge.</p>
+     */
+    private static final int PATTERN_TOP_OFFSET = 16;
+
+    /** Blank pixels between the bottom of the box and the signature. */
+    private static final int CAPTION_GAP = 2;
 
     private final @Nullable String opId;
     private final @Nullable String patterns;
@@ -59,7 +74,7 @@ public class MDHexPatternComponent extends MDComponent {
 
     @Override
     public int getHeight(Minecraft minecraft, int maxX, int maxY) {
-        int height = PATTERN_HEIGHT;
+        int height = PATTERN_HEIGHT + CAPTION_GAP;
         if (this.caption != null) {
             height += this.caption.getHeight(minecraft, getPreferredWidth(minecraft, maxX, maxY), maxY);
         }
@@ -71,6 +86,9 @@ public class MDHexPatternComponent extends MDComponent {
         Minecraft minecraft = context.minecraft();
         GuiGraphics graphics = context.graphics();
         PoseStack pose = graphics.pose();
+        // The hexagon and the signature are centred together, the way Ageratum centres an image:
+        // ask for the line's width and take what is left over on both sides.
+        int left = Math.max(0, (Math.max(0, context.maxX()) - PATTERN_WIDTH) / 2);
         pose.pushPose();
         try {
             if (!ensure(minecraft)) {
@@ -78,12 +96,15 @@ public class MDHexPatternComponent extends MDComponent {
                 return;
             }
 
+            pose.pushPose();
+            pose.translate(left, -PATTERN_TOP_OFFSET, 0);
             HexPatternBridge.render(this.pattern, graphics, context.mouseX(), context.mouseY());
+            pose.popPose();
 
             if (this.caption != null) {
-                // Centred under the hexagon, matching where Patchouli's pattern template puts it.
-                int x = Math.max(0, (PATTERN_WIDTH - minecraft.font.width(this.caption.getText())) / 2);
-                pose.translate(x, PATTERN_HEIGHT, 0);
+                int captionLeft = left
+                        + Math.max(0, (PATTERN_WIDTH - minecraft.font.width(this.caption.getText())) / 2);
+                pose.translate(captionLeft, PATTERN_HEIGHT + CAPTION_GAP, 0);
                 this.caption.render(context);
             }
         } catch (RuntimeException exception) {

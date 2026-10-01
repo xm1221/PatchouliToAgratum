@@ -10,8 +10,15 @@ import java.util.Map;
  * <p>Hex Casting draws these pages through a template whose every text end is a page field or a
  * language key — the pattern's name, its {@code input}/{@code output} signature and its
  * description — so all of that survives the conversion untouched and only the vector pattern
- * needs the mod that owns it. The result is a page laid out as the original: heading on top,
- * pattern on the left with its signature underneath, prose on the right.</p>
+ * needs the mod that owns it.</p>
+ *
+ * <p>The page is laid out in one column: the name as a heading, the hexagon centred with its
+ * signature under it, then the description. The original puts the hexagon on the left and the
+ * description on the right, which needs a row of two columns — and Ageratum's rows wrap a child
+ * whose preferred width does not fit, while a paragraph's preferred width is the whole line. A
+ * two-column row holding a description therefore always wraps, which stacks the two halves and
+ * leaves the pattern indented beside nothing. Centring the pattern in its own band is what the
+ * layout does instead of pretending to be two columns.</p>
  *
  * <p>Named after Hex Casting on purpose and safe without it: the page types are matched by id, and
  * a book with no such page is unaffected. Nothing in this module knows the mod exists.</p>
@@ -60,16 +67,9 @@ public final class HexPatternPageRenderer implements PageRenderer {
 
         String body = context.renderText(context.text());
         if (body.isBlank()) {
-            // Nothing to sit beside the pattern, so no row either: a row with an empty column
-            // would just indent the pattern for no reason.
             return markdown.append(pattern).toString();
         }
-        return markdown.append("<row>\n\n")
-                .append(pattern)
-                .append("\n\n---\n\n")
-                .append(body)
-                .append("\n\n</row>")
-                .toString();
+        return markdown.append(pattern).append("\n\n").append(body).toString();
     }
 
     /**
