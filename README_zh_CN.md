@@ -2,11 +2,12 @@
 
 [English](README.md) | 简体中文
 
-把 **Patchouli 手册**搬进**藿香（Ageratum）手册**。
+**装了哪本 Patchouli 手册，就有一本真正的藿香（Ageratum）手册。** 导读在游戏启动时当场生成：
+不写盘、不需要重载，之后往包里加书也不用做任何事。
 
-首要服务对象是 Hex Casting（HexMod）的藿香手册，但转换器本身是通用的：任何 Patchouli
-手册都能镜像，换书只是改一行配置。产物是一个**独立附属 mod**，与 HexMod 永久解耦——
-不修改 HexMod 源码、不依赖它的构建，也不在 classpath 上引用它（装了就有那本书，没装就没有）。
+首要服务对象是 Hex Casting（HexMod）的手册，但转换器本身是通用的：任何 Patchouli 手册都能镜像。
+产物是一个**独立附属 mod**，与 HexMod 永久解耦——不修改 HexMod 源码、不依赖它的构建，也不在
+classpath 上引用它（装了就有那本书，没装就没有）。
 
 * MC **1.21.1** / NeoForge **21.1.236**
 * 运行期硬依赖：**Patchouli** `1.21.1-93-NEOFORGE` + **藿香 Ageratum** `0.0.1+build.121`（都是客户端侧）
@@ -14,10 +15,33 @@
 
 ---
 
-## 1. 它做什么
+## 1. 它给你什么
 
-游戏组装资源包时，这个 mod 把配置里点名的 Patchouli 书**读一遍**，转成藿香导读文档，
-塞进一个**虚拟资源包**（不写盘、不需要重启资源重载）：
+* **凡装了的 Patchouli 手册，全都镜像。** 没有白名单、不用逐本配置：包里有哪本就转哪本，
+  `exclude.mods` 是唯一的开关——它是黑名单。
+* **正文还是正文。** `patchouli:text` / `link` 页转成原生 Markdown，文字可选中、可搜索、链接可跳；
+  `$(...)` 宏、字形、`$(l:…)` 链接照旧生效，语言文件按它们真实的样子读（JSON5 注释、不带引号的键、
+  多余的逗号、自己带分隔符的嵌套键）。
+* **配方是藿香原生组件。** 工作台 / 熔炉 / 高炉 / 烟熏炉 / 营火 / 锻造台 / 切石机页变成
+  `<recipe id="…"/>`，由藿香按真实配方作画，原料能悬停看名字。
+* **物品、方块、实体也是活的。** `spotlight` → `<item>`，带装饰的实体 → `<entity>`，图片页就是
+  真正的 Markdown 图片。
+* **HexCasting 的图案页保住六边形。** 标题、Input/Output、正文都是原生 Markdown，六边形由
+  `<pta:pattern>` 画；页自带 `patterns` 的（那些操作本身没有形状的：数字之精思、向量常量、掩码）
+  就照页上写的画，图案不会丢。
+* **转不了的不去近似，而是托管。** 无法忠实转换的页面，由**真正的 Patchouli 页面**离屏画在藿香
+  文档里（`<pta:page>`）：16 种内置页型、别的 mod 的模板页、它们的 `IComponentProcessor`、
+  HexMod 自己的页型全都在内——**零复刻成本**，也不会随版本漂移。（Patchouli 的
+  `BookPage.render(...)` 不依赖 `Screen`，所以能离屏构造真实的 `GuiBookEntry` 原地画出来。）
+* **成就锁是真能用的。** 条目上的 `advancement`、以及「整章都被锁」的章节，转成一道**每帧按玩家
+  判定**的门：成就一到手，页面当场打开，不用重载。
+* **每本书一个指南书物品。** `pta:guidebook` 带 `pta:guide` 组件，名字与贴图都来自那本书，
+  创造页里每本镜像书一个。
+* **书和手册能互相合成。** 两个方向都是无序合成，并各带一条配方书的解锁进度（见 §3）。
+* **告诉你丢了什么。** 每次转换都出一份报告：转了多少页、哪些走了托管、哪些语言键缺失、
+  哪里不得不有损。
+
+一张图说清它怎么跑：
 
 ```
 Patchouli 书（其它 mod 的 jar 里）
@@ -31,19 +55,38 @@ Patchouli 书（其它 mod 的 jar 里）
         └─ 转换不了的页面：<pta:page> 宿主组件里画**真正的 Patchouli 页面**
 ```
 
-两条设计主线：
+两条设计主线贯穿全部：**不复制页型，托管渲染**（所以兜底那条路什么都不会丢），
+**能忠实转换的就写成原生 Markdown**（所以结果是可选中、可搜索、可点击的，而不是一堆贴图）。
 
-* **不复制页型，托管渲染。** Patchouli 的 `BookPage.render(...)` 不依赖 `Screen`，所以能离屏构造
-  真实的 `GuiBookEntry` 后在藿香文档里画出来。16 种内置页型、别的 mod 的模板页、
-  `IComponentProcessor`、HexMod 的图案页全部原样生效，**零复刻成本**，也不会随版本漂移。
-* **能忠实转换的就写成原生 Markdown。** 正文（`patchouli:text` / `link`、`$(...)` 宏、字形）、
-  配方、物品展示、图片、实体都转成藿香自己的语法——可选中、可搜索、链接可跳，
-  而不是一块块贴图。
+## 2. 页型映射
 
-同一套机制指向**服务端数据**而不是资源，就带出每本镜像书的一对合成配方：
-Patchouli 书合成对应的藿香手册，以及反方向。
+| Patchouli 页 | 变成 |
+|---|---|
+| `patchouli:text` / `link` | 原生 Markdown（保留 `$(...)` 宏、字形、`$(l:…)` 链接改写为 md 链接） |
+| `crafting` / `smelting` / `blasting` / `smoking` / `campfire` / `smithing` / `stonecutting` | `<recipe id="…"/>`（藿香原生配方组件）+ 文案走 Markdown |
+| `hexcasting:crafting_multi` | 每个变体一张 `<recipe>`，用 `<row>` 自动折行（牺牲原书的「合并投料」显示） |
+| `hexcasting:brainsweep` | 读配方文件自己重建：**一张居中 row**（怪 → 方块 → 媒质 → 产物）+ 文案走 Markdown |
+| `spotlight` | `<row>` 里一个 `<item id="…"/>` + 文案 |
+| `image` | 原生 Markdown 图片 |
+| `entity` | `<entity id="…"/>` + 文案 |
+| `empty` | 什么都不输出 |
+| HexCasting 图案页（`hexcasting:pattern` / `manual_pattern` / `manual_pattern_nosig`） | 标题、Input/Output、正文转原生 Markdown；六边形由 `<pta:pattern>` 画（版式：标题在上、图案居中、IO 在图案正下方、正文在后）——页自带 `patterns` 的（那些没有自己形状的操作：数字之精思、向量常量、掩码）就照页上写的画，图案才不会丢 |
+| 其余（含别的 mod 的模板页） | `<pta:page book="…" entry="…" page="…"/>` —— 在藿香文档里画**真实的那一页** |
 
-## 2. 装与用
+brainsweep 是藿香唯一画不了的配方：它不是原版配方，`<recipe>` 没有对应工厂，所以按页面点名的
+配方文件重建。Patchouli 围在它外面的那张框贴图**没有复刻**——框里只有槽位与箭头、没有物品画，
+脱开内容单独画也没有对齐关系；改成一行居中的活组件，怪、方块、媒质都能悬停看名字，也可搜索。
+配方文件读不明确的一律不猜（tag 形式的方块或怪、少见的 ingredient、除不尽任何紫水晶单位的媒质），
+那页仍旧回退托管。
+
+**锁定**：Patchouli 条目的 `advancement`、以及「整章都被锁」的章节，转成
+`<pta:locked advancements="…" names="…" [unlock="any"] [secret="true"]>…</pta:locked>`。
+是否解锁是**每个玩家、每个时刻**的事，而藿香把文档缓存在静态表里，所以在资源包里按玩家给不同正文
+是死路——文档只写「要求」，由客户端组件**每帧绘制时**判定（复用 Patchouli 自己的
+`ClientAdvancements.hasDone`），达成后当场打开、不需要重载。提示框说条件时用**成就名称**
+（优先客户端实时的名字，取不到才用文档里 `names` 记下的名字，最后才是 id）。
+
+## 3. 装与用
 
 装到客户端（`mods/` 里放 `pta`、`patchouli`、`ageratum`），启动即可。
 
@@ -95,34 +138,6 @@ Patchouli 书合成对应的藿香手册，以及反方向。
 每本书另有一份 `<ns>/<book>-conversion-report.md`：转换了多少页、哪些页走了托管、
 哪些 key 缺失、哪些地方做了有损转换。
 
-## 3. 页型映射
-
-| Patchouli 页 | 变成 |
-|---|---|
-| `patchouli:text` / `link` | 原生 Markdown（保留 `$(...)` 宏、字形、`$(l:…)` 链接改写为 md 链接） |
-| `crafting` / `smelting` / `blasting` / `smoking` / `campfire` / `smithing` / `stonecutting` | `<recipe id="…"/>`（藿香原生配方组件）+ 文案走 Markdown |
-| `hexcasting:crafting_multi` | 每个变体一张 `<recipe>`，用 `<row>` 自动折行（牺牲原书的「合并投料」显示） |
-| `hexcasting:brainsweep` | 读配方文件自己重建：**一张居中 row**（怪 → 方块 → 媒质 → 产物）+ 文案走 Markdown |
-| `spotlight` | `<row>` 里一个 `<item id="…"/>` + 文案 |
-| `image` | 原生 Markdown 图片 |
-| `entity` | `<entity id="…"/>` + 文案 |
-| `empty` | 什么都不输出 |
-| HexCasting 图案页（`hexcasting:pattern` / `manual_pattern` / `manual_pattern_nosig`） | 标题、Input/Output、正文转原生 Markdown；六边形由 `<pta:pattern>` 画（版式：标题在上、图案居中、IO 在图案正下方、正文在后）——页自带 `patterns` 的（那些没有自己形状的操作：数字之精思、向量常量、掩码）就照页上写的画，图案才不会丢 |
-| 其余（含别的 mod 的模板页） | `<pta:page book="…" entry="…" page="…"/>` —— 在藿香文档里画**真实的那一页** |
-
-brainsweep 是藿香唯一画不了的配方：它不是原版配方，`<recipe>` 没有对应工厂，所以按页面点名的
-配方文件重建。Patchouli 围在它外面的那张框贴图**没有复刻**——框里只有槽位与箭头、没有物品画，
-脱开内容单独画也没有对齐关系；改成一行居中的活组件，怪、方块、媒质都能悬停看名字，也可搜索。
-配方文件读不明确的一律不猜（tag 形式的方块或怪、少见的 ingredient、除不尽任何紫水晶单位的媒质），
-那页仍旧回退托管。
-
-**锁定**：Patchouli 条目的 `advancement`、以及「整章都被锁」的章节，转成
-`<pta:locked advancements="…" names="…" [unlock="any"] [secret="true"]>…</pta:locked>`。
-是否解锁是**每个玩家、每个时刻**的事，而藿香把文档缓存在静态表里，所以在资源包里按玩家给不同正文
-是死路——文档只写「要求」，由客户端组件**每帧绘制时**判定（复用 Patchouli 自己的
-`ClientAdvancements.hasDone`），达成后当场打开、不需要重载。提示框说条件时用**成就名称**
-（优先客户端实时的名字，取不到才用文档里 `names` 记下的名字，最后才是 id）。
-
 ## 4. 已知偏差与限制
 
 * **侧边栏仍会列出被锁（含 `secret`）条目的标题**：标题来自静态目录树，藿香没有锁的概念，
@@ -137,7 +152,7 @@ brainsweep 是藿香唯一画不了的配方：它不是原版配方，`<recipe>
 * 导出是**同步**写几百个文件（为了聊天栏回显顺序确定），量大时会卡一下。
 * 藿香侧 scissor 换算在 `scale != 1` 时是错的 → 本 mod 不画书面/另一页/控件，因此完全不碰 scissor。
 
-## 5. 构建与开发
+## 5. 构建
 
 ```powershell
 cd E:\miemod\PatchouliToAgratum
@@ -149,41 +164,8 @@ $env:JAVA_HOME='C:\Program Files\Java\jdk-21.0.10'   # Gradle 必须跑在 JDK 2
 
 依赖里若缺东西：`.\gradlew.bat --refresh-dependencies`。
 
-**两个模块，一条纪律**：
-
-* `pta-core/` —— 纯 JVM 转换核心：书模型、JSON5 与 `$(...)`/字形的解析、页型策略、藿香 Markdown 输出。
-  **不允许引用任何 MC / Patchouli / 藿香类型**（它编译时没有它们的 classpath），所以能离线单测、
-  也能整块复用到别处。
-* 根项目 —— mod 侧胶水：入口、配置、虚拟资源包、三个藿香扩展组件、物品、命令、模型覆盖。
-  核心的源码是**直接编进主 source set** 的（`sourceSets.main.java.srcDir(project(':pta-core')…)`），
-  不是 `implementation project(':pta-core')`：MDG 的 dev 运行时 classpath 只认声明的 source set
-  与一份库清单，普通项目依赖编译得过、运行时 `ClassNotFoundException`。核心的「纯」由构建本身
-  担保——同一份源码在没有 MC 的 classpath 下编译并跑测试，`build` 依赖它。
-
-```
-pta-core/src/main/java/cn/xm1221/pta/core/
-├─ book/            BookLayout（读分类/条目/锁）· BookConverter（出文档）· BookSource · 文本转换
-│  └─ page/         PageTypeRegistry + 每种页型一个 Renderer（兜底放最后）
-├─ lang/Json5       语言文件解析与 flatten
-├─ text/            Patchouli 文本扫描、宏展开、藿香 Markdown 书写
-└─ report/          ConversionReport（覆盖统计与有损项）
-
-src/main/java/cn/xm1221/pta/
-├─ PtaMod · PtaConfig · PtaBookList · PtaGuides
-├─ PtaComponents（藿香扩展组件注册）· PtaPageRenderers（页型策略接线）
-├─ PtaDataComponents（pta:guide）· PtaItems · item/GuideBookItem
-└─ client/
-   ├─ PtaClient（资源包 + 命令 + 模型事件）
-   ├─ component/   MDPatchouliPageComponent · MDHexPatternComponent · MDLockedComponent
-   ├─ lock/PtaLocks · render/（Patchouli 页宿主 + 图案反射桥）· model/（按组件换物品模型）
-   ├─ source/（ModFileBookSource · PtaGuideDocuments · PtaGuidePack · PtaPackFinder）
-   └─ export/ · command/
-```
-
-写代码前值得知道的几个坑（都已在代码注释里就地说明）：藿香 `<row>` 会把子块宽度收成**首选宽度**
-（靠 `maxX()` 自居中的图案/图片会左对齐）、组件的**位置靠 pose 不靠偏移**、
-1.21.1 与 1.21.4 的 scissor 语义相反、语言文件里嵌套节点是「自己带分隔符」的写法
-（`"advancement.hexcasting:"`、`"lore/"`）。
+两个模块与它们之间的纪律（纯 JVM 转换核心直接编进 mod 的 source set，加上 mod 侧胶水）、
+目录结构、以及这个代码库会咬人的几个坑，见 **[docs/DEVELOPING.md](docs/DEVELOPING.md)**。
 
 ## 6. 移植 / 衍生
 

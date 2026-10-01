@@ -2,13 +2,14 @@
 
 English | [简体中文](README_zh_CN.md)
 
-Moves **Patchouli books** into **Ageratum guides**.
+**Every Patchouli book installed becomes a real Ageratum guide.** The guides are generated in memory
+while the game starts: nothing is written to disk, no resource reload is needed, and a book that a
+pack adds later takes no work at all.
 
 Its first target is Hex Casting's own book, but the converter itself is generic: any Patchouli book
-can be mirrored, and pointing it at another one is a line of configuration. The result is a
-standalone add-on mod, permanently decoupled from Hex Casting — it does not patch Hex Casting, does
-not build against it, and does not reference it on the classpath (with the mod installed its book is
-there; without it, it is not).
+can be mirrored. The result is a standalone add-on mod, permanently decoupled from Hex Casting — it
+does not patch Hex Casting, does not build against it, and does not reference it on the classpath
+(with the mod installed its book is there; without it, it is not).
 
 * Minecraft **1.21.1** / NeoForge **21.1.236**
 * Required at runtime: **Patchouli** `1.21.1-93-NEOFORGE` and **Ageratum** `0.0.1+build.121` (both client-side)
@@ -16,11 +17,40 @@ there; without it, it is not).
 
 ---
 
-## 1. What it does
+## 1. What you get
 
-While the game assembles its resource packs, the mod **reads** every Patchouli book named in its
-config, converts it into Ageratum guide documents, and serves them from a **virtual resource pack**
-(nothing is written to disk, and no resource reload is needed):
+* **Every Patchouli book, mirrored.** No whitelist and no per-book setup: whatever books the pack has
+  are converted, and `exclude.mods` is the only switch — a blacklist.
+* **Prose that is still prose.** `patchouli:text` and `link` pages become native Markdown, so the
+  text is selectable and searchable and its links navigate. `$(...)` macros, glyphs and `$(l:…)` links
+  keep working, and the book's language files are read as they really are (JSON5 comments, unquoted
+  keys, trailing commas, nested keys that carry their own separator).
+* **Recipes as Ageratum's own components.** Crafting, smelting, blasting, smoking, campfire,
+  smithing and stonecutting pages become `<recipe id="…"/>`, drawn by Ageratum from the real recipe,
+  with ingredient tooltips to hover.
+* **Items, blocks and entities are live too.** A `spotlight` becomes an `<item>`, a decorated entity
+  an `<entity>`, and an image page a real Markdown image.
+* **Hex Casting's pattern pages keep their hexagon.** Title, Input/Output and prose are native
+  Markdown, and `<pta:pattern>` draws the pattern itself. A page that carries its own patterns — the
+  ops with no shape of their own, like the number pattern or a mask — is drawn from those, so nothing
+  is lost.
+* **What cannot be converted is hosted, not approximated.** A page this mod cannot convert faithfully
+  is drawn by **the real Patchouli page**, off-screen, inside the Ageratum document (`<pta:page>`).
+  That covers all 16 built-in page types, other mods' template pages, their `IComponentProcessor`s and
+  Hex Casting's own page types: zero reproduction cost, and nothing to drift when versions change.
+  (Patchouli's `BookPage.render(...)` does not need a `Screen`, so a real `GuiBookEntry` can be built
+  off-screen and painted in place.)
+* **Advancement locks work.** An entry gated by an advancement, or a chapter whose every entry is
+  locked, becomes a gate checked **per player, while drawing**: earn the advancement and the page
+  opens on the spot, with nothing to reload.
+* **A guide item for each book.** `pta:guidebook` carries a `pta:guide` component; its name and
+  texture come from that book, and the creative tab offers one per mirrored book.
+* **Craft a book into its guide, and back.** Both directions are shapeless recipes, each with the
+  advancement that puts it in the recipe book (see §3).
+* **See what was lost.** Every conversion produces a report: how many pages were converted, which
+  were hosted, which language keys were missing, and where something had to be dropped.
+
+How that runs, in one picture:
 
 ```
 Patchouli book (inside some other mod's jar)
@@ -35,21 +65,43 @@ Patchouli book (inside some other mod's jar)
            <pta:page> host component
 ```
 
-Two design lines run through all of it:
+Two design lines run through all of it: **do not reimplement page types — host them**, which is why
+the fallback loses nothing; and **what can be converted faithfully becomes native Markdown**, which
+is why the result is selectable, searchable and clickable instead of a set of pictures.
 
-* **Do not reimplement page types; host them.** Patchouli's `BookPage.render(...)` does not need a
-  `Screen`, so a real `GuiBookEntry` can be built off-screen and painted inside an Ageratum document.
-  All 16 built-in page types, other mods' template pages, their `IComponentProcessor`s and Hex
-  Casting's pattern pages work as they are: **zero reproduction cost**, and nothing to drift when
-  versions change.
-* **What can be converted faithfully becomes native Markdown.** Prose (`patchouli:text` / `link`,
-  `$(...)` macros, glyphs), recipes, item displays, images and entities all become Ageratum's own
-  markup — selectable, searchable, with links that navigate — instead of inert pictures.
+## 2. What each page becomes
 
-The same mechanism, pointed at **server data** instead of resources, carries one pair of crafting
-recipes per mirrored book: the Patchouli book into its guide, and the guide back into the book.
+| Patchouli page | Becomes |
+|---|---|
+| `patchouli:text` / `link` | native Markdown (macros, glyphs and `$(l:…)` links rewritten as Markdown links) |
+| `crafting` / `smelting` / `blasting` / `smoking` / `campfire` / `smithing` / `stonecutting` | `<recipe id="…"/>` (Ageratum's own recipe component) + prose as Markdown |
+| `hexcasting:crafting_multi` | one `<recipe>` per variant, wrapped by a `<row>` (the book's "combined inputs" display is lost) |
+| `hexcasting:brainsweep` | the recipe rebuilt from its datapack file as one centred row — mob, block, media cost, result — + prose as Markdown |
+| `spotlight` | one `<item id="…"/>` in a `<row>` (or on its own) + prose |
+| `image` | native Markdown image |
+| `entity` | `<entity id="…"/>` + prose |
+| `empty` | nothing at all |
+| Hex Casting pattern pages (`hexcasting:pattern` / `manual_pattern` / `manual_pattern_nosig`) | title, Input/Output and prose as native Markdown; the hexagon itself is drawn by `<pta:pattern>` (title on top, hexagon centred, Input/Output right under it, prose last) — a page that carries its own patterns draws those, which is how the ops with no shape of their own (the number pattern, a vector constant, a mask) keep their picture |
+| everything else (including other mods' template pages) | `<pta:page book="…" entry="…" page="…"/>` — **that very page** is drawn inside the Ageratum document |
 
-## 2. Installing and using it
+Brainsweep is the one recipe Ageratum cannot draw for itself: it is not a vanilla recipe, so the
+page is rebuilt from the recipe file the page names. The frame texture Hex Casting paints around it
+is not reproduced — the mob, the blocks and the media are live components, which can be hovered and
+read, where a picture of a frame could not be. A recipe that cannot be read plainly (a block or mob
+given by tag, an unusual ingredient, a cost that is not a whole number of amethyst units) leaves the
+page hosted instead.
+
+**Locking**: a Patchouli entry's `advancement`, and a chapter whose every entry is locked, become
+`<pta:locked advancements="…" names="…" [unlock="any"] [secret="true"]>…</pta:locked>`.
+Whether a lock is open is a per-player, per-moment question, while Ageratum caches documents in a
+static table — so giving different players different prose in the resource pack is a dead end.
+Documents only state the requirement, and a client component decides **while drawing each frame**
+(reusing Patchouli's own `ClientAdvancements.hasDone`); once earned, the page opens on the spot and
+nothing has to be reloaded. The notice names the condition by **achievement name** — the live
+client-side name when it can be asked, otherwise the name recorded in the document's `names`
+attribute, and the id only as a last resort.
+
+## 3. Installing and using it
 
 Install it on the client (put `pta`, `patchouli` and `ageratum` in `mods/`) and start the game.
 
@@ -110,38 +162,6 @@ resource pack that loads directly — plus `<ns>/<book>-conversion-report.md` pe
 were converted, which pages were hosted, which language keys were missing, and where the conversion
 had to lose something.
 
-## 3. Page type mapping
-
-| Patchouli page | Becomes |
-|---|---|
-| `patchouli:text` / `link` | native Markdown (macros, glyphs and `$(l:…)` links rewritten as Markdown links) |
-| `crafting` / `smelting` / `blasting` / `smoking` / `campfire` / `smithing` / `stonecutting` | `<recipe id="…"/>` (Ageratum's own recipe component) + prose as Markdown |
-| `hexcasting:crafting_multi` | one `<recipe>` per variant, wrapped by a `<row>` (the book's "combined inputs" display is lost) |
-| `hexcasting:brainsweep` | the recipe rebuilt from its datapack file as one centred row — mob, block, media cost, result — + prose as Markdown |
-| `spotlight` | one `<item id="…"/>` in a `<row>` (or on its own) + prose |
-| `image` | native Markdown image |
-| `entity` | `<entity id="…"/>` + prose |
-| `empty` | nothing at all |
-| Hex Casting pattern pages (`hexcasting:pattern` / `manual_pattern` / `manual_pattern_nosig`) | title, Input/Output and prose as native Markdown; the hexagon itself is drawn by `<pta:pattern>` (title on top, hexagon centred, Input/Output right under it, prose last) — a page that carries its own patterns draws those, which is how the ops with no shape of their own (the number pattern, a vector constant, a mask) keep their picture |
-| everything else (including other mods' template pages) | `<pta:page book="…" entry="…" page="…"/>` — **that very page** is drawn inside the Ageratum document |
-
-Brainsweep is the one recipe Ageratum cannot draw for itself: it is not a vanilla recipe, so the
-page is rebuilt from the recipe file the page names. The frame texture Hex Casting paints around it
-is not reproduced — the mob, the blocks and the media are live components, which can be hovered and
-read, where a picture of a frame could not be. A recipe that cannot be read plainly (a block or mob
-given by tag, an unusual ingredient, a cost that is not a whole number of amethyst units) leaves the
-page hosted instead.
-
-**Locking**: a Patchouli entry's `advancement`, and a chapter whose every entry is locked, become
-`<pta:locked advancements="…" names="…" [unlock="any"] [secret="true"]>…</pta:locked>`.
-Whether a lock is open is a per-player, per-moment question, while Ageratum caches documents in a
-static table — so giving different players different prose in the resource pack is a dead end.
-Documents only state the requirement, and a client component decides **while drawing each frame**
-(reusing Patchouli's own `ClientAdvancements.hasDone`); once earned, the page opens on the spot and
-nothing has to be reloaded. The notice names the condition by **achievement name** — the live
-client-side name when it can be asked, otherwise the name recorded in the document's `names`
-attribute, and the id only as a last resort.
-
 ## 4. Known deviations and limits
 
 * **The sidebar still lists the titles of locked (and `secret`) entries**: titles come from a static
@@ -165,7 +185,7 @@ attribute, and the id only as a last resort.
 * Ageratum's scissor arithmetic is wrong while `scale != 1`, so this mod never draws book chrome, a
   facing page or widgets and therefore never touches a scissor.
 
-## 5. Building and developing
+## 5. Building
 
 ```powershell
 cd E:\miemod\PatchouliToAgratum
@@ -177,46 +197,9 @@ $env:JAVA_HOME='C:\Program Files\Java\jdk-21.0.10'   # Gradle must run on JDK 21
 
 If a dependency is missing: `.\gradlew.bat --refresh-dependencies`.
 
-**Two modules, one discipline**:
-
-* `pta-core/` — the plain-JVM conversion core: the book model, JSON5 and `$(...)`/glyph parsing, page
-  type strategy, Ageratum Markdown output. **It may not reference any Minecraft, Patchouli or
-  Ageratum type** (they are not on its compile classpath), which is what lets it be unit-tested
-  offline and reused wholesale elsewhere.
-* the root project — the mod-side glue: entrypoint, config, virtual resource pack, the Ageratum
-  extension components, the item, the commands, model overrides. The core's sources are **compiled
-  into the main source set** (`sourceSets.main.java.srcDir(project(':pta-core')…)`) rather than added
-  as an `implementation project(':pta-core')`: MDG's dev runtime classpath only resolves declared
-  source sets plus a curated library list, so an ordinary project dependency compiles and then fails
-  at runtime with `ClassNotFoundException`. The core's purity is guaranteed by the build itself —
-  the same sources compile and run their tests with no Minecraft on the classpath, and `build`
-  depends on that.
-
-```
-pta-core/src/main/java/cn/xm1221/pta/core/
-├─ book/            BookLayout (categories/entries/locks) · BookConverter (documents) · BookSource · text conversion
-│  └─ page/         PageTypeRegistry + one Renderer per page type (the fallback is registered last)
-├─ lang/Json5       language file parsing and flattening
-├─ text/            Patchouli text scanning, macro expansion, Ageratum Markdown writing
-└─ report/          ConversionReport (coverage and lossy conversions)
-
-src/main/java/cn/xm1221/pta/
-├─ PtaMod · PtaConfig · PtaBookList · PtaGuides
-├─ PtaComponents (Ageratum extension component registration) · PtaPageRenderers (page type wiring)
-├─ PtaDataComponents (pta:guide) · PtaItems · item/GuideBookItem
-└─ client/
-   ├─ PtaClient (resource pack + commands + model events)
-   ├─ component/   MDPatchouliPageComponent · MDHexPatternComponent · MDLockedComponent
-   ├─ lock/PtaLocks · render/ (Patchouli page host + pattern reflection bridge) · model/ (per-component item models)
-   ├─ source/ (ModFileBookSource · PtaGuideDocuments · PtaGuidePack · PtaPackFinder)
-   └─ export/ · command/
-```
-
-A few traps worth knowing before writing code here (each is explained where it bites in the code):
-an Ageratum `<row>` narrows its children to their **preferred width** (so a pattern or an image that
-centres itself on `maxX()` ends up left-aligned), a component's **position comes from the pose, not
-from offsets**, 1.21.1 and 1.21.4 have opposite scissor semantics, and a nested node in a language
-file carries **its own separator** (`"advancement.hexcasting:"`, `"lore/"`).
+The two modules and the discipline between them (a plain-JVM conversion core compiled into the mod's
+source set, plus the mod-side glue), the directory layout, and the traps this codebase bites back
+with are in **[docs/DEVELOPING.md](docs/DEVELOPING.md)** (in Chinese).
 
 ## 6. Porting / deriving
 
