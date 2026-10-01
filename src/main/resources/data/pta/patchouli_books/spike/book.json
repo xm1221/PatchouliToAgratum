@@ -1,0 +1,8 @@
+{
+  "name": "PTA Spike Book",
+  "landing_text": "A throwaway Patchouli book used to verify that this mod can host real Patchouli pages inside an Ageratum guide.",
+  "use_resource_pack": true,
+  "version": 1,
+  "i18n": false,
+  "show_progress": false
+}

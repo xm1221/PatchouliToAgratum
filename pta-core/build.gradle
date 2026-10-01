@@ -1,0 +1,36 @@
+// Pure-JVM conversion core: no Minecraft, no Patchouli, no Ageratum.
+// Keeping it dependency-free is what lets the whole $(...) / macro / i18n pipeline be
+// unit tested offline against real book files.
+
+plugins {
+    id 'java-library'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
+
+repositories {
+    maven { url = uri("https://maven.aliyun.com/repository/public") }
+    mavenCentral()
+}
+
+dependencies {
+    // JSON5 (Patchouli language files are nested JSON5 with comments and bare keys).
+    implementation 'org.json:json:20240303'
+
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    systemProperty 'file.encoding', 'UTF-8'
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat = 'full'
+    }
+}

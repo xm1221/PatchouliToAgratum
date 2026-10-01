@@ -1,0 +1,42 @@
+{
+  "name": "Spike Entry",
+  "icon": "minecraft:diamond",
+  "category": "pta:spike",
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "text": "Page 0: a plain text page. If you can read this inside the guide, the host resolved the book, the entry and the page."
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "minecraft:diamond_sword",
+      "title": "A Diamond Sword",
+      "text": "Page 1: spotlight, drawn with Patchouli's own crafting-texture banner and item slot."
+    },
+    {
+      "type": "patchouli:crafting",
+      "recipe": "minecraft:crafting_table",
+      "text": "Page 2: a real recipe page. The grid comes from the live RecipeManager."
+    },
+    {
+      "type": "patchouli:image",
+      "images": [
+        "minecraft:textures/item/diamond.png"
+      ],
+      "border": true,
+      "title": "Page 3: image"
+    },
+    {
+      "type": "patchouli:entity",
+      "entity": "minecraft:zombie",
+      "name": "Page 4: entity",
+      "text": "The entity preview should rotate with the mouse."
+    },
+    {
+      "type": "patchouli:link",
+      "url": "https://example.com",
+      "link_text": "Example",
+      "text": "Page 5: a link page, so the host also has to cope with a page that adds a real button."
+    }
+  ]
+}
