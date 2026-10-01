@@ -72,7 +72,13 @@ neoForge {
         }
 
         data {
-            clientData()
+            // data(), not the MDK template's clientData(). MDG resolves a run type by looking it up
+            // in the NeoForge userdev config's run map, and NeoForge 21.1.236 declares only
+            // client, data, gameTestServer, server and junit. clientData is a DSL method MDG still
+            // offers but this NeoForge does not define, so it fails with "Trying to prepare unknown
+            // run: clientData". NeoForge's data run already uses the client classpath, which is what
+            // datagen needs.
+            data()
             programArguments.addAll '--mod', project.mod_id, '--all',
                     '--output', file('src/generated/resources/').getAbsolutePath(),
                     '--existing', file('src/main/resources/').getAbsolutePath()
