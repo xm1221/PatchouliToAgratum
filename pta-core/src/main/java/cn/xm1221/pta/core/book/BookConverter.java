@@ -125,6 +125,25 @@ public final class BookConverter {
                             category.indexPath(), description, report))
                     .append('\n');
         }
+
+        // A chapter's own contents. The sidebar cannot show a nested category's documents, and
+        // even at the top level a list here is the only grouped view a reader gets.
+        StringBuilder contents = new StringBuilder();
+        for (BookLayout.Entry entry : layout.entries().values()) {
+            if (!category.id().equals(entry.category())) {
+                continue;
+            }
+            String title = resolve(layout, lang, stringField(entry.json(), "name"), report);
+            if (title.isBlank()) {
+                title = entry.path();
+            }
+            contents.append("- [").append(title).append("](")
+                    .append(BookLayout.relativize(category.indexPath(), entry.documentPath()))
+                    .append(")\n");
+        }
+        if (contents.length() > 0) {
+            out.append('\n').append(contents);
+        }
         return out.toString();
     }
 
@@ -138,8 +157,8 @@ public final class BookConverter {
         StringBuilder body = new StringBuilder();
         List<Object> pages = entry.pages();
         for (int index = 0; index < pages.size(); index++) {
-            Object page = pages.get(index);
-            if (!(page instanceof Map<?, ?> pageJson)) {
+            Map<?, ?> pageJson = normalizePage(pages.get(index));
+            if (pageJson == null) {
                 continue;
             }
             String section = renderPage(layout, entry, index, pageJson, lang, report, expander);
@@ -159,6 +178,25 @@ public final class BookConverter {
             out.append('\n').append(body);
         }
         return out.toString();
+    }
+
+    /**
+     * Normalises one element of a {@code pages} array.
+     *
+     * <p>Patchouli allows an element to be a bare string, which implicitly means a text page whose
+     * text is that string. Every lore entry in Hex Casting is written that way, so skipping
+     * non-object pages silently produces documents with a title and no content.</p>
+     *
+     * @return the page as an object, or {@code null} when it is neither a string nor an object
+     */
+    private static Map<?, ?> normalizePage(Object page) {
+        if (page instanceof Map<?, ?> map) {
+            return map;
+        }
+        if (page instanceof String text) {
+            return Map.of("type", "patchouli:text", "text", text);
+        }
+        return null;
     }
 
     /**

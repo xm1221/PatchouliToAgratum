@@ -50,9 +50,15 @@ public final class BookLayout {
             return this.path;
         }
 
-        /** The category's landing document. */
+        /**
+         * The category's landing document.
+         *
+         * <p>Capped at two directories, because Ageratum's sidebar lists a child directory only
+         * through its {@code index} document and never lists that child's own documents. Anything
+         * deeper would simply not be reachable.</p>
+         */
         public String indexPath() {
-            return this.path + "/index";
+            return limitDepth(this.path + "/index", 2);
         }
     }
 
@@ -73,9 +79,18 @@ public final class BookLayout {
     public record Entry(String id, String path, String category, String icon, String advancement,
                         int sortnum, boolean priority, boolean secret, List<Object> pages,
                         Map<String, Object> json) {
-        /** The document this entry becomes, without the {@code .md} suffix. */
+        /**
+         * The document this entry becomes, without the {@code .md} suffix.
+         *
+         * <p>Flattened to at most one directory. Ageratum renders a two-level sidebar: a
+         * top-level directory contributes its own documents as second-level entries, but a
+         * <i>child</i> directory contributes only its {@code index} document and none of its
+         * documents. Leaving a nested category's entries where Patchouli puts them therefore makes
+         * them unreachable, so the nesting is folded into the file name instead — the sidebar
+         * shows a document's title, not its file name.</p>
+         */
         public String documentPath() {
-            return this.path;
+            return limitDepth(this.path, 1);
         }
     }
 
@@ -275,6 +290,34 @@ public final class BookLayout {
     public static String directoryOf(String documentPath) {
         int slash = documentPath.lastIndexOf('/');
         return slash < 0 ? "" : documentPath.substring(0, slash);
+    }
+
+    /**
+     * Folds a path's deeper segments into its last kept one.
+     *
+     * <p>{@code limitDepth("patterns/great_spells/foo", 1)} is {@code patterns/great_spells__foo}:
+     * one directory, and a file name that still sorts next to its siblings. Ageratum's sidebar
+     * only reaches one level of child directory, so anything deeper would be invisible.</p>
+     *
+     * @param path           a document or directory path
+     * @param maxDirectories how many leading segments may remain as directories
+     */
+    public static String limitDepth(String path, int maxDirectories) {
+        String[] segments = path.split("/");
+        if (segments.length <= maxDirectories + 1) {
+            return path;
+        }
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < maxDirectories; i++) {
+            out.append(segments[i]).append('/');
+        }
+        for (int i = maxDirectories; i < segments.length; i++) {
+            if (i > maxDirectories) {
+                out.append("__");
+            }
+            out.append(segments[i]);
+        }
+        return out.toString();
     }
 
     // ------------------------------------------------------------------- parsing helpers

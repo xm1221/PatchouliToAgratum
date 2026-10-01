@@ -172,6 +172,45 @@ class BookLayoutTest {
         return count;
     }
 
+    /**
+     * Ageratum's sidebar reaches one level of child directory and lists only that child's index
+     * document, never the child's own documents. Leaving a nested entry where Patchouli puts it
+     * makes it unreachable, so the nesting is folded into the file name.
+     */
+    @Test
+    void flattensNestedEntriesIntoTheirParentDirectory() {
+        BookLayout layout = hexmodBook();
+
+        BookLayout.Entry altiora = layout.entries().get("hexcasting:patterns/great_spells/altiora");
+        assertNotNull(altiora);
+        assertEquals("patterns/great_spells__altiora", altiora.documentPath());
+        assertEquals("patterns", BookLayout.directoryOf(altiora.documentPath()));
+
+        // The nested category's own index stays a child directory, which is exactly what the
+        // sidebar does render.
+        assertEquals("patterns/great_spells/index",
+                layout.categories().get("hexcasting:patterns/great_spells").indexPath());
+
+        // Nothing may be deeper than one directory, or it cannot be navigated to.
+        for (BookLayout.Entry entry : layout.entries().values()) {
+            long depth = entry.documentPath().chars().filter(c -> c == '/').count();
+            assertTrue(depth <= 1, entry.id() + " is " + depth + " directories deep: " + entry.documentPath());
+        }
+    }
+
+    @Test
+    void limitDepthFoldsDeeperSegmentsIntoTheFileName() {
+        assertEquals("index", BookLayout.limitDepth("index", 1));
+        assertEquals("lore/cardamom1", BookLayout.limitDepth("lore/cardamom1", 1));
+        assertEquals("patterns/great_spells__altiora",
+                BookLayout.limitDepth("patterns/great_spells/altiora", 1));
+        // Two directories are allowed for a category index, which the sidebar does render.
+        assertEquals("patterns/great_spells/index",
+                BookLayout.limitDepth("patterns/great_spells/index", 2));
+        // Keeping two directories means the third and later segments fold into the file name.
+        assertEquals("a/b/c__index", BookLayout.limitDepth("a/b/c/index", 2));
+    }
+
     @Test
     void readsABookFromAnInMemorySource() {
         Map<String, String> files = new LinkedHashMap<>();

@@ -200,6 +200,67 @@ class BookConverterTest {
         return String.join("/", parts);
     }
 
+    /**
+     * Patchouli lets a {@code pages} element be a bare string, meaning a text page with that text.
+     * Every lore entry in Hex Casting is written that way, so skipping non-object pages produced
+     * chapters that were nothing but a title.
+     */
+    @Test
+    void convertsBareStringPages() {
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put("data/demo/patchouli_books/demo/book.json", "{ name: \"Demo\" }");
+        files.put("assets/demo/patchouli_books/demo/en_us/categories/demo.json",
+                "{ name: \"Demo\", description: \"d\", icon: \"minecraft:book\" }");
+        files.put("assets/demo/patchouli_books/demo/en_us/entries/demo/story.json", """
+                {
+                  name: "A Story",
+                  icon: "minecraft:book",
+                  category: "demo:demo",
+                  pages: [ "first page of the story", { "type": "patchouli:text", "text": "second page" } ]
+                }
+                """);
+
+        BookLayout layout = BookLayout.load(BookSource.of(files), "demo", "demo", "en_us");
+        String document = BookConverter.convert(layout, Map.of()).documents().get("demo/story");
+
+        assertTrue(document.contains("first page of the story"), document);
+        assertTrue(document.contains("second page"), document);
+    }
+
+    /** The regression that made the lore chapter a title with nothing under it. */
+    @Test
+    void givesTheLoreChapterRealContent() throws IOException {
+        BookConverter.Output output = convertHexmod();
+        String cardamom = output.documents().get("lore/cardamom1");
+        assertNotNull(cardamom);
+        // Body, not just the heading: the file must be longer than its own front matter + title.
+        int bodyStart = cardamom.indexOf('\n', cardamom.indexOf("# "));
+        assertTrue(cardamom.length() - bodyStart > 400,
+                "lore entry has almost no body: " + cardamom.substring(0, Math.min(300, cardamom.length())));
+        assertFalse(cardamom.contains("hexcasting.page.lore.cardamom1.1"),
+                "the language key was not resolved");
+    }
+
+    /** A chapter index lists its own entries, which is the only grouped view a reader gets. */
+    @Test
+    void writesAChapterContentsList() throws IOException {
+        BookConverter.Output output = convertHexmod();
+
+        String patterns = output.documents().get("patterns/index");
+        assertNotNull(patterns);
+        assertTrue(patterns.contains("- [Basic Patterns](basics)"), patterns);
+        assertTrue(patterns.contains("](readwrite)"), patterns);
+        // The nested category's entries belong to that category, not to this one.
+        assertFalse(patterns.contains("great_spells__"), patterns);
+
+        // A nested chapter's entries live in the parent directory, so the link climbs out of the
+        // chapter's own directory first. Every such link is verified against the document map by
+        // everyGeneratedLinkTargetsAGeneratedDocument.
+        String greatSpells = output.documents().get("patterns/great_spells/index");
+        assertNotNull(greatSpells);
+        assertTrue(greatSpells.contains("](../great_spells__altiora)"), greatSpells);
+    }
+
     @Test
     void reportsLanguageKeysThatGoNowhere() {
         Map<String, String> files = new LinkedHashMap<>();
