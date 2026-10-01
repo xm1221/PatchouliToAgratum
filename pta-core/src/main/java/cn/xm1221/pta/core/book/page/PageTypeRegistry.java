@@ -45,6 +45,7 @@ public final class PageTypeRegistry {
         }
         registry.register(SpotlightPageRenderer.TYPE, new SpotlightPageRenderer());
         registry.register(ImagePageRenderer.TYPE, new ImagePageRenderer());
+        registry.register(EntityPageRenderer.TYPE, new EntityPageRenderer());
         registry.register(BlankPageRenderer.TYPE, new BlankPageRenderer());
         registry.fallback(new HostPageRenderer());
         return registry;

@@ -135,6 +135,26 @@ class BuiltinPageRendererTest {
         assertEquals("", markdown);
     }
 
+    @Test
+    void anEntityPageBecomesANativeEntity() {
+        String markdown = render(Map.of(
+                "type", "patchouli:entity",
+                "entity", "minecraft:creeper"));
+
+        assertTrue(markdown.contains("<entity id=\"minecraft:creeper\"/>"), markdown);
+        assertFalse(markdown.contains("<pta:page"), markdown);
+    }
+
+    /** NBT written into the entity id is Patchouli's spelling, not Ageratum's, so it declines. */
+    @Test
+    void anEntityWithNbtIsHostedInstead() {
+        String markdown = render(Map.of(
+                "type", "patchouli:entity",
+                "entity", "minecraft:creeper{powered:1}"));
+
+        assertTrue(markdown.contains("<pta:page"), markdown);
+    }
+
     /**
      * The whole book, so the aggregate is pinned rather than one page at a time: what is left to
      * Patchouli is Hex Casting's own custom page type plus the spotlights that carry item
