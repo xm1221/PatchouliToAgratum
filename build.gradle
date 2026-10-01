@@ -105,7 +105,7 @@ configurations {
 
 dependencies {
     // Patchouli is a hard runtime dependency: this mod hosts real Patchouli pages instead of
-    // re-implementing them. See README.md, "它做什么".
+    // re-implementing them. See README.md, "What it does".
     compileOnly "vazkii.patchouli:Patchouli:${patchouli_version}"
     runtimeOnly "vazkii.patchouli:Patchouli:${patchouli_version}"
 
@@ -160,6 +160,11 @@ publishing {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+// The licence travels with the jar, so a copy that has been passed around still says what it is.
+tasks.named('jar') {
+    from('LICENSE')
 }
 
 // `gradlew build` has to keep running the core's offline regression suite; it is the only
