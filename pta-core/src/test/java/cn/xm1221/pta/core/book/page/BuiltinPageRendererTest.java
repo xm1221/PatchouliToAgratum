@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class BuiltinPageRendererTest {
     private static final Path HEXMOD_RESOURCES = Path.of("E:/miemod/libs/HexMod/Common/src/main/resources");
+    private static final Path HEXMOD_GENERATED = Path.of("E:/miemod/libs/HexMod/Common/src/generated/resources");
 
     private static BookLayout demoBook() {
         Map<String, String> files = new LinkedHashMap<>();
@@ -157,18 +159,19 @@ class BuiltinPageRendererTest {
 
     /**
      * The whole book, so the aggregate is pinned rather than one page at a time: what is left to
-     * Patchouli is Hex Casting's own custom page type plus the spotlights that carry item
-     * components, and none of the page types this stage converted.
+     * Patchouli is only the spotlights that carry item components, and none of the page types this
+     * stage converted — brainsweep's eight pages included, whose recipes are read from the mod's
+     * generated data rather than from beside its book.
      */
     @Test
     void onlyPagesThatCannotBeExpressedAreLeftToPatchouli() {
         Assumptions.assumeTrue(Files.isDirectory(HEXMOD_RESOURCES), "HexMod checkout not present");
 
         BookLayout layout = BookLayout.load(
-                BookSource.ofDirectory(HEXMOD_RESOURCES, "hexcasting", "thehexbook"),
+                BookSource.ofDirectories(List.of(HEXMOD_RESOURCES, HEXMOD_GENERATED)),
                 "hexcasting", "thehexbook", "en_us");
         Map<String, Integer> hosted = BookConverter.convert(layout, Map.of()).report().hostedPageTypes();
 
-        assertEquals(Map.of("hexcasting:brainsweep", 8, "patchouli:spotlight", 4), hosted, hosted.toString());
+        assertEquals(Map.of("patchouli:spotlight", 4), hosted, hosted.toString());
     }
 }

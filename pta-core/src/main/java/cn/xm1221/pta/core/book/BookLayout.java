@@ -108,16 +108,18 @@ public final class BookLayout {
     private final String namespace;
     private final String bookName;
     private final String language;
+    private final BookSource source;
     private final Map<String, Object> bookJson;
     private final Map<String, Category> categories;
     private final Map<String, Entry> entries;
 
-    private BookLayout(String namespace, String bookName, String language,
+    private BookLayout(String namespace, String bookName, String language, BookSource source,
                        Map<String, Object> bookJson, Map<String, Category> categories,
                        Map<String, Entry> entries) {
         this.namespace = namespace;
         this.bookName = bookName;
         this.language = language;
+        this.source = source;
         this.bookJson = bookJson;
         this.categories = categories;
         this.entries = entries;
@@ -183,11 +185,22 @@ public final class BookLayout {
                     json));
         }
 
-        return new BookLayout(namespace, bookName, language, bookJson, categories, entries);
+        return new BookLayout(namespace, bookName, language, source, bookJson, categories, entries);
     }
 
     public String namespace() {
         return this.namespace;
+    }
+
+    /**
+     * The book's files.
+     *
+     * <p>Kept so that a renderer can follow a page to data the page only names — a recipe page
+     * names a recipe id, and the recipe itself is a file beside the book rather than part of
+     * it.</p>
+     */
+    public BookSource source() {
+        return this.source;
     }
 
     public String bookName() {

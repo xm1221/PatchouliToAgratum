@@ -83,12 +83,37 @@ public interface BookSource {
         String bookRoot = NAMESPACE_BOOKS + "/" + bookName + "/";
         String dataRoot = "data/" + namespace + "/" + bookRoot;
         String assetRoot = "assets/" + namespace + "/" + bookRoot;
-        return new BookSource() {
-            @Override
-            public String read(String resourcePath) {
-                Path file = resourcesRoot.resolve(resourcePath);
+        return new DirectoryBookSource(List.of(resourcesRoot), dataRoot + ", " + assetRoot);
+    }
+
+    /**
+     * A source backed by several resource directories, read in order.
+     *
+     * <p>A mod under development keeps generated data — the recipes among it — in a directory of
+     * its own rather than beside its hand-written files, so what a book refers to can be spread
+     * over more than one root. The first root that has a file wins, which is the order a resource
+     * pack stack uses.</p>
+     *
+     * @param resourcesRoots directories holding {@code assets/} and {@code data/}, most important
+     *                       first
+     */
+    static BookSource ofDirectories(List<Path> resourcesRoots) {
+        return new DirectoryBookSource(List.copyOf(resourcesRoots), null);
+    }
+
+    /**
+     * Resource directories on disk, addressed the way a resource manager addresses them.
+     *
+     * @param roots the directories, in lookup order
+     * @param label what the source calls itself, or {@code null} to list the roots
+     */
+    record DirectoryBookSource(List<Path> roots, String label) implements BookSource {
+        @Override
+        public String read(String resourcePath) {
+            for (Path root : this.roots) {
+                Path file = root.resolve(resourcePath);
                 if (!Files.isRegularFile(file)) {
-                    return null;
+                    continue;
                 }
                 try {
                     return Files.readString(file, StandardCharsets.UTF_8);
@@ -96,30 +121,34 @@ public interface BookSource {
                     throw new UncheckedIOException("Failed to read " + file, exception);
                 }
             }
+            return null;
+        }
 
-            @Override
-            public List<String> list(String directory, String suffix) {
-                Path root = resourcesRoot.resolve(directory);
-                if (!Files.isDirectory(root)) {
-                    return List.of();
+        @Override
+        public List<String> list(String directory, String suffix) {
+            List<String> result = new ArrayList<>();
+            for (Path root : this.roots) {
+                Path start = root.resolve(directory);
+                if (!Files.isDirectory(start)) {
+                    continue;
                 }
-                List<String> result = new ArrayList<>();
-                try (Stream<Path> walk = Files.walk(root)) {
+                try (Stream<Path> walk = Files.walk(start)) {
                     walk.filter(Files::isRegularFile)
                             .filter(path -> path.getFileName().toString().endsWith(suffix))
-                            .forEach(path -> result.add(
-                                    resourcesRoot.relativize(path).toString().replace('\\', '/')));
+                            .map(path -> root.relativize(path).toString().replace('\\', '/'))
+                            .filter(path -> !result.contains(path))
+                            .forEach(result::add);
                 } catch (IOException exception) {
-                    throw new UncheckedIOException("Failed to walk " + root, exception);
+                    throw new UncheckedIOException("Failed to walk " + start, exception);
                 }
-                result.sort(String::compareTo);
-                return result;
             }
+            result.sort(String::compareTo);
+            return result;
+        }
 
-            @Override
-            public String toString() {
-                return "BookSource[" + dataRoot + ", " + assetRoot + "]";
-            }
-        };
+        @Override
+        public String toString() {
+            return this.label != null ? "BookSource[" + this.label + "]" : "BookSource" + this.roots;
+        }
     }
 }
