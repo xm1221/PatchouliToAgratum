@@ -1,9 +1,12 @@
 package cn.xm1221.pta.client.render;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.HolderLookup;
 import org.jetbrains.annotations.Nullable;
 import vazkii.patchouli.api.IComponentRenderContext;
+import vazkii.patchouli.api.IVariable;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -24,8 +27,10 @@ import java.util.function.UnaryOperator;
  * <p>Two of Hex Casting's passes are reproduced, in this order, because that is the order
  * Patchouli itself uses:</p>
  * <ol>
- *   <li>{@code onVariablesAvailable(...)}, which turns the raw action id or pattern string into
- *       the actual patterns; the registry provider it takes is unused by both components.</li>
+ *   <li>{@code onVariablesAvailable(lookup, registries)}, which turns the raw action id or pattern
+ *       string into the actual patterns. The lookup is how Patchouli feeds a page's own values in,
+ *       so a page-written pattern is handed over through it as real JSON — see
+ *       {@link #rawFieldLookup(HolderLookup.Provider)}.</li>
  *   <li>{@code build(x, y, hexSize)}, which only decides where inside the component to draw —
  *       {@code (0, 0)} puts the hexagon at the component's own origin.</li>
  * </ol>
@@ -72,7 +77,7 @@ public final class HexPatternBridge {
 
         Object component = instantiate(lookupClass);
         set(opNameRaw, component, opId);
-        prepare(component, registries);
+        prepare(component, UnaryOperator.identity(), registries);
         return component;
     }
 
@@ -91,22 +96,51 @@ public final class HexPatternBridge {
         require();
 
         Object component = instantiate(manualClass);
+        // The field is what the component reads its raw value from, so it is filled in as well;
+        // the lookup below is what turns that value into patterns.
         set(patternsRaw, component, patternsJson(patterns));
         if (strokeOrder != null) {
             set(strokeOrderRaw, component, strokeOrder.toString());
         }
-        prepare(component, registries);
+        prepare(component, rawFieldLookup(registries), registries);
         return component;
     }
 
     /**
-     * Turns the converter's compact pattern list into the JSON text Hex Casting parses.
+     * The lookup that gives {@code ManualPatternComponent} back the types its string fields lost.
      *
-     * <p>{@code ManualPatternComponent} takes its patterns as a string, wraps it in a Patchouli
-     * variable and unpacks that into {@code {startdir, signature, q, r}} objects — which only works
-     * because Patchouli parses a string that is valid JSON as JSON. Passing text that a Markdown
-     * attribute can hold, and building the JSON here, keeps the converter free of quote escaping
-     * and keeps Hex Casting's shape in one place.</p>
+     * <p>That component reads both of its fields through this lookup, as
+     * {@code lookup.apply(IVariable.wrap(field))} — the patterns and then, on the line above,
+     * the stroke-order flag. Patchouli fills such a field by turning the page's JSON value into
+     * text, and {@code IVariable.wrap(String)} builds a plain string primitive rather than parsing
+     * it again, so on their own the patterns arrive as one long string — Gson then refuses to read
+     * a pattern object out of it — and there is nothing to read {startdir, signature} from.</p>
+     *
+     * <p>Standing in for Patchouli therefore means restoring the type from the text, and only
+     * that: a field holding a JSON array or object becomes that array or object again, and every
+     * other field is passed through untouched. Anything else would be wrong as well as useless —
+     * answering every request with the patterns, for instance, makes the stroke-order flag read
+     * an array as a boolean and throw "Array must have size 1, but has size 2".</p>
+     */
+    private static UnaryOperator<IVariable> rawFieldLookup(@Nullable HolderLookup.Provider registries) {
+        return variable -> {
+            JsonElement value = variable.unwrap();
+            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
+                return variable;
+            }
+            String text = value.getAsString().trim();
+            if (!text.startsWith("[") && !text.startsWith("{")) {
+                return variable;
+            }
+            return IVariable.wrap(JsonParser.parseString(text), registries);
+        };
+    }
+
+    /**
+     * Turns the converter's compact pattern list into the JSON Hex Casting reads.
+     *
+     * <p>Building the JSON here keeps the converter free of quote escaping, because the converter
+     * writes this list into a Markdown attribute, and keeps Hex Casting's shape in one place.</p>
      *
      * <p>Accepted forms: {@code DIR:SIGNATURE[@q,r]} with {@code ;} between patterns, a bare angle
      * signature (which Hex Casting reads as starting east), or JSON as it stands.</p>
@@ -179,20 +213,27 @@ public final class HexPatternBridge {
         try {
             render.invoke(pattern, graphics, null, 0F, (int) mouseX, (int) mouseY);
         } catch (InvocationTargetException exception) {
-            throw new IllegalStateException(message(exception.getCause()));
+            throw failed(exception.getCause());
         } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException(message(exception));
+            throw failed(exception);
         }
     }
 
-    private static void prepare(Object component, @Nullable HolderLookup.Provider registries) {
+    /**
+     * Runs the two passes Patchouli would run, then pins the pattern to the component's origin.
+     *
+     * @param lookup what the component asks for the values it renders; a lookup action ignores it,
+     *               a page-written pattern is served from it
+     */
+    private static void prepare(Object component, UnaryOperator<IVariable> lookup,
+                                @Nullable HolderLookup.Provider registries) {
         try {
-            onVariablesAvailable.invoke(component, UnaryOperator.identity(), registries);
+            onVariablesAvailable.invoke(component, lookup, registries);
             build.invoke(component, 0, 0, 1);
         } catch (InvocationTargetException exception) {
-            throw new IllegalStateException(message(exception.getCause()));
+            throw failed(exception.getCause());
         } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException(message(exception));
+            throw failed(exception);
         }
     }
 
@@ -209,10 +250,11 @@ public final class HexPatternBridge {
         }
     }
 
-    private static Object instantiate(@Nullable Class<?> type) {        try {
+    private static Object instantiate(@Nullable Class<?> type) {
+        try {
             return type.getDeclaredConstructor().newInstance();
         } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException(message(exception));
+            throw failed(exception);
         }
     }
 
@@ -220,7 +262,7 @@ public final class HexPatternBridge {
         try {
             field.set(target, value);
         } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException(message(exception));
+            throw failed(exception);
         }
     }
 
@@ -236,6 +278,13 @@ public final class HexPatternBridge {
         }
         String detail = cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
         return cause.getClass().getSimpleName() + "：" + detail;
+    }
+
+    /**
+     * Wraps what Hex Casting threw, keeping the original as the cause so that a log has the origin.
+     */
+    private static IllegalStateException failed(@Nullable Throwable cause) {
+        return new IllegalStateException(message(cause), cause);
     }
 
     private static synchronized void resolve() {
