@@ -1,5 +1,7 @@
 # Patchouli to Ageratum (`pta`)
 
+English | [简体中文](README_zh_CN.md)
+
 Moves **Patchouli books** into **Ageratum guides**.
 
 Its first target is Hex Casting's own book, but the converter itself is generic: any Patchouli book
