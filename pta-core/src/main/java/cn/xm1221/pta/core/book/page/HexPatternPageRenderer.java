@@ -30,8 +30,8 @@ public final class HexPatternPageRenderer implements PageRenderer {
      * The page types this renderer answers for.
      *
      * <p>{@code manual_pattern} and {@code manual_pattern_nosig} take their pattern from the page
-     * rather than from an action, and are used by addons; {@code nosig} is the variant without a
-     * stroke-order hint.</p>
+     * rather than from an action, and are used by addons; {@code nosig} is the variant without the
+     * input/output line, which is what the example pages use.</p>
      */
     public static final List<String> TYPES = List.of(
             "hexcasting:pattern",
@@ -207,9 +207,14 @@ public final class HexPatternPageRenderer implements PageRenderer {
     /**
      * Whether Hex Casting should hint the stroke order.
      *
-     * <p>A manual page may say so itself; otherwise the page type decides — that is the only
-     * difference between {@code manual_pattern} and {@code manual_pattern_nosig}. Action lookups
-     * need nothing here: Hex Casting derives the hint from the action's own tags.</p>
+     * <p>A page may say so itself. Otherwise both manual page types ask for the hint, because that
+     * is what the original ends up drawing: {@code manual_pattern_nosig} has no such field at all
+     * and {@code manual_pattern}'s {@code #stroke_order} is never set by any page, and Hex Casting
+     * reads a missing value as {@code true}. The {@code nosig} variant is the one without the
+     * input/output line, not the one without the hint.</p>
+     *
+     * <p>Action lookups need nothing here: Hex Casting derives the hint from the action's own
+     * tags.</p>
      *
      * @return the value to write, or {@code null} to leave the choice to Hex Casting
      */
@@ -218,14 +223,7 @@ public final class HexPatternPageRenderer implements PageRenderer {
         if (declared != null && !declared.isBlank()) {
             return declared.trim();
         }
-        String type = context.type();
-        if (type.equals("hexcasting:manual_pattern")) {
-            return "true";
-        }
-        if (type.equals("hexcasting:manual_pattern_nosig")) {
-            return "false";
-        }
-        return null;
+        return MANUAL_TYPES.contains(context.type()) ? "true" : null;
     }
 
     private static void attribute(StringBuilder tag, String name, String value) {

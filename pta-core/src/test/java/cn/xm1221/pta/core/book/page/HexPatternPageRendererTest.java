@@ -189,8 +189,9 @@ class HexPatternPageRendererTest {
                 Map.of(), new BookTextConverter(layout, ConversionReport.empty())));
 
         assertTrue(markdown.contains("patterns=\"NORTH_EAST:qaq;EAST:qaq@2,0\""), markdown);
-        // The type, not the page, decides the stroke-order hint; nosig means none.
-        assertTrue(markdown.contains("stroke_order=\"false\""), markdown);
+        // nosig is the page without an input/output line, not without the hint: the original's
+        // nosig template carries no stroke-order field, and Hex Casting reads a missing one as true.
+        assertTrue(markdown.contains("stroke_order=\"true\""), markdown);
     }
 
     /** A single object rather than a list, which the book also uses. */
