@@ -27,7 +27,8 @@ public final class PageTypeRegistry {
      *
      * <p>Currently: text and link pages become Markdown, every recipe page becomes Ageratum's
      * native recipe component, Hex Casting's pattern pages keep their prose but hand the hexagon
-     * to the mod that owns it, and everything else is hosted.</p>
+     * to the mod that owns it, spotlights become native items, images become Markdown images,
+     * empty pages become nothing, and everything else is hosted.</p>
      */
     public static PageTypeRegistry standard() {
         PageTypeRegistry registry = new PageTypeRegistry();
@@ -42,6 +43,9 @@ public final class PageTypeRegistry {
         for (String type : HexPatternPageRenderer.TYPES) {
             registry.register(type, patterns);
         }
+        registry.register(SpotlightPageRenderer.TYPE, new SpotlightPageRenderer());
+        registry.register(ImagePageRenderer.TYPE, new ImagePageRenderer());
+        registry.register(BlankPageRenderer.TYPE, new BlankPageRenderer());
         registry.fallback(new HostPageRenderer());
         return registry;
     }

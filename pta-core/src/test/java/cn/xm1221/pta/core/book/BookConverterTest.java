@@ -110,6 +110,7 @@ class BookConverterTest {
                   pages: [
                     { type: "patchouli:text", text: "First $(#ff0000)red$() page." },
                     { type: "patchouli:spotlight", item: "minecraft:diamond", title: "Look" },
+                    { type: "patchouli:multiblock", name: "Stairs" },
                     { type: "patchouli:text", title: "Heading", text: "Second page." }
                   ]
                 }
@@ -121,14 +122,17 @@ class BookConverterTest {
 
         // Text pages become real Markdown.
         assertTrue(document.contains("First <color=#ff0000>red</color> page."), document);
-        // Pages that draw something are handed to the runtime component.
-        assertTrue(document.contains("<pta:page book=\"demo:demo\" entry=\"demo/item\" page=\"1\"/>"),
+        // A spotlight becomes a native item, title and all.
+        assertTrue(document.contains("## Look"), document);
+        assertTrue(document.contains("<item id=\"minecraft:diamond\" showText=\"false\"/>"), document);
+        // A page type with no native equivalent is handed to the runtime component.
+        assertTrue(document.contains("<pta:page book=\"demo:demo\" entry=\"demo/item\" page=\"2\"/>"),
                 document);
         // A page title becomes a section heading.
         assertTrue(document.contains("## Heading"), document);
         // The lock travels in the front matter.
         assertTrue(document.contains("pta_lock: \"minecraft:story/root\""), document);
-        assertTrue(output.report().hostedPageTypes().containsKey("patchouli:spotlight"),
+        assertTrue(output.report().hostedPageTypes().containsKey("patchouli:multiblock"),
                 output.report().toString());
     }
 
@@ -166,8 +170,12 @@ class BookConverterTest {
                     break;
                 }
                 String target = text.substring(index + 2, end);
+                int bracket = text.lastIndexOf('[', index);
+                boolean image = bracket > 0 && text.charAt(bracket - 1) == '!';
                 index = text.indexOf("](", end);
-                if (target.startsWith("http")) {
+                if (target.startsWith("http") || image) {
+                    // An image names a texture in a resource pack, not a document in this guide, so
+                    // it is not a link this test can resolve against the generated files.
                     continue;
                 }
                 links++;

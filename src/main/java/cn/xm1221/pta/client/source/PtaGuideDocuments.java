@@ -1,6 +1,7 @@
 package cn.xm1221.pta.client.source;
 
 import cn.xm1221.pta.PtaBookList;
+import cn.xm1221.pta.PtaPageRenderers;
 import cn.xm1221.pta.core.book.BookConverter;
 import cn.xm1221.pta.core.book.BookLayout;
 import cn.xm1221.pta.core.book.BookSource;
@@ -95,7 +96,7 @@ public final class PtaGuideDocuments {
             String langText = source.read(langPath);
             Map<String, String> lang = langText == null ? Map.of() : Json5.flatten(langText);
 
-            BookConverter.Output output = BookConverter.convert(layout, lang);
+            BookConverter.Output output = BookConverter.convert(layout, lang, PtaPageRenderers.registry());
             mergeReports(merged, output.report());
 
             for (Map.Entry<String, String> document : output.documents().entrySet()) {
