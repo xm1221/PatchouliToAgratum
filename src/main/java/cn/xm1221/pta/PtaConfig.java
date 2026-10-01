@@ -1,0 +1,63 @@
+package cn.xm1221.pta;
+
+import net.minecraft.resources.ResourceLocation;
+import net.neoforged.neoforge.common.ModConfigSpec;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Client configuration.
+ *
+ * <p>The mod is generic: it mirrors whichever Patchouli books it is told to. Hex Casting's book
+ * is the default because that is what this was built for, but pointing it at any other book is a
+ * config edit and a restart away.</p>
+ */
+public final class PtaConfig {
+    public static final ModConfigSpec SPEC;
+
+    private static final ModConfigSpec.ConfigValue<List<? extends String>> BOOKS;
+
+    static {
+        ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
+        builder.comment(
+                "Patchouli books to mirror into Ageratum guides, as namespace:book.",
+                "Use * to mirror every book Patchouli can find.",
+                "pta:spike is this mod's own throwaway book, listed so the mirroring can be",
+                "exercised without installing anything else. Remove it from the list to hide it."
+        ).push("books");
+        BOOKS = builder
+                .comment("One entry per book, e.g. hexcasting:thehexbook")
+                .defineListAllowEmpty("mirror", List.of("hexcasting:thehexbook", "pta:spike"),
+                        () -> "hexcasting:thehexbook", PtaConfig::isValidBookEntry);
+        builder.pop();
+        SPEC = builder.build();
+    }
+
+    private PtaConfig() {
+    }
+
+    private static boolean isValidBookEntry(Object value) {
+        if (!(value instanceof String text)) {
+            return false;
+        }
+        return text.equals("*") || ResourceLocation.tryParse(text) != null;
+    }
+
+    /**
+     * @return the configured book ids, or {@code null} when everything should be mirrored
+     */
+    public static List<ResourceLocation> books() {
+        List<ResourceLocation> result = new ArrayList<>();
+        for (String entry : BOOKS.get()) {
+            if (entry.equals("*")) {
+                return null;
+            }
+            ResourceLocation id = ResourceLocation.tryParse(entry);
+            if (id != null) {
+                result.add(id);
+            }
+        }
+        return result;
+    }
+}

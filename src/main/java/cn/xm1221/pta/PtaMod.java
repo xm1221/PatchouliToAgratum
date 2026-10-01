@@ -28,6 +28,7 @@ public final class PtaMod {
     public static final Logger LOGGER = LoggerFactory.getLogger("PatchouliToAgeratum");
 
     public PtaMod(IEventBus modEventBus, ModContainer modContainer) {
+        modContainer.registerConfig(net.neoforged.fml.config.ModConfig.Type.CLIENT, PtaConfig.SPEC);
         LOGGER.info("Patchouli to Ageratum loading on {}", FMLEnvironment.dist);
     }
 }

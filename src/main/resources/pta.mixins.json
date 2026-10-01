@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "cn.xm1221.pta.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "GuideDocumentCacheMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
