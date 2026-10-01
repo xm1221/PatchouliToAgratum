@@ -85,7 +85,8 @@ public class MDPatchouliPageComponent extends MDComponent {
      * ({@code GuideScreen.java:346}). In 1.21.1 {@code GuiGraphics.enableScissor} ignores the
      * pose and takes absolute GUI-space coordinates, so nothing compensates for that division:
      * whenever scale &lt; 1 the rectangle grows, moves down-right, and shears the top-left
-     * corner off the page. {@code Appearance.PAPER} gets the same look without any of this.</p>
+     * corner off the page. The default {@link PatchouliPageHost.Appearance#PLAIN} avoids all
+     * of this by drawing nothing that needs clipping.</p>
      */
     private void renderBookAppearance(MDRenderContext context, GuiGraphics graphics) {
         context.enableScissor(0, 0, this.host.width(), this.host.height());
