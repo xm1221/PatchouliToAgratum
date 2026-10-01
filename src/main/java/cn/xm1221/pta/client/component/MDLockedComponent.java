@@ -1,6 +1,7 @@
 package cn.xm1221.pta.client.component;
 
 import cn.xm1221.pta.client.lock.PtaLocks;
+import com.mojang.blaze3d.vertex.PoseStack;
 import dev.anvilcraft.resource.ageratum.client.feat.markdown.MDExtensionContext;
 import dev.anvilcraft.resource.ageratum.client.feat.markdown.MDRenderContext;
 import dev.anvilcraft.resource.ageratum.client.feat.markdown.component.MDComponent;
@@ -15,7 +16,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 
 /**
  * Ageratum component that shows a document only once its advancement is earned.
@@ -42,11 +43,13 @@ import java.util.stream.Collectors;
  * for a secret entry rather than naming what would unlock it.</p>
  *
  * <p>The body arrives as this component's children, so it is drawn here rather than by the guide
- * screen's own loop. That loop is mirrored exactly — each block at the line's full width, each
- * advanced by its height plus {@value #BLOCK_GAP} — because a container that measured its children
- * differently would quietly change the page: Ageratum's {@code <row>}, for instance, hands a child
- * its <i>preferred</i> width, which left-aligns anything that centres itself, such as a pattern or an
- * image.</p>
+ * screen's own loop. That loop is mirrored exactly — the pose advanced by each block's height plus
+ * {@value #BLOCK_GAP}, the mouse and the offset kept local to the block, the full line handed to it
+ * as its width — because a container that placed or measured its children differently would quietly
+ * change the page. Ageratum's {@code <row>}, for instance, hands a child its <i>preferred</i> width,
+ * which left-aligns anything that centres itself, such as a pattern or an image; and drawing every
+ * child at the pose's origin, as one might expect the offsets to have placed them, stacks the whole
+ * body on its first line.</p>
  */
 public class MDLockedComponent extends MDComponent {
     /**
@@ -61,6 +64,14 @@ public class MDLockedComponent extends MDComponent {
     private final List<MDComponent> body;
     private final List<String> advancements;
 
+    /**
+     * What the book called those advancements, in the same order.
+     *
+     * <p>Used to name a requirement the client cannot name itself — an advancement it has never
+     * been told about, which only the document knows about.</p>
+     */
+    private final List<String> names;
+
     /** Whether one advancement is enough, as a locked chapter needs. */
     private final boolean unlockAny;
 
@@ -70,39 +81,46 @@ public class MDLockedComponent extends MDComponent {
     /** Built while locked; the notice is a single block that does not change. */
     private @Nullable MDComponent notice;
 
-    private MDLockedComponent(List<MDComponent> body, List<String> advancements, boolean unlockAny,
-                              boolean secret) {
+    private MDLockedComponent(List<MDComponent> body, List<String> advancements, List<String> names,
+                              boolean unlockAny, boolean secret) {
         super(FormattedText.EMPTY);
         this.body = body;
         this.advancements = advancements;
+        this.names = names;
         this.unlockAny = unlockAny;
         this.secret = secret;
     }
 
     /**
-     * Parses {@code <pta:locked advancements="..." unlock="any" secret="true"> ... </pta:locked>}.
+     * Parses {@code <pta:locked advancements="..." names="..." unlock="any" secret="true"> ... }
+     * {@code </pta:locked>}.
      *
      * <p>A lock with no requirement shows its body: it would never open, and an incomplete tag
      * should not cost a reader the page.</p>
      */
     public static MDComponent parse(MDExtensionContext context) {
-        List<String> advancements = advancements(context.params().get("advancements"));
+        List<String> advancements = split(context.params().get("advancements"), ",");
         if (advancements.isEmpty()) {
-            advancements = advancements(context.params().get("advancement"));
+            advancements = split(context.params().get("advancement"), ",");
+        }
+        List<String> names = split(context.params().get("names"), "|");
+        if (names.isEmpty()) {
+            names = split(context.params().get("name"), "|");
         }
         boolean unlockAny = "any".equalsIgnoreCase(trimmed(context.params().get("unlock")));
         boolean secret = Boolean.parseBoolean(trimmed(context.params().get("secret")));
         List<MDComponent> body = context.renderedContent();
-        return new MDLockedComponent(body == null ? List.of() : List.copyOf(body), advancements,
+        return new MDLockedComponent(body == null ? List.of() : List.copyOf(body), advancements, names,
                 unlockAny, secret);
     }
 
-    private static List<String> advancements(@Nullable String value) {
+    /** Splits a repeated attribute, dropping blanks and keeping the order. */
+    private static List<String> split(@Nullable String value, String separator) {
         List<String> found = new ArrayList<>();
         if (value == null) {
             return found;
         }
-        for (String part : value.split(",")) {
+        for (String part : value.split(Pattern.quote(separator))) {
             String trimmed = trimmed(part);
             if (trimmed != null && !found.contains(trimmed)) {
                 found.add(trimmed);
@@ -143,14 +161,29 @@ public class MDLockedComponent extends MDComponent {
                 text.append(' ').append(translate("pta.lock.secret"));
             } else if (!this.advancements.isEmpty()) {
                 text.append('\n').append(Component.translatable("pta.lock.requires",
-                        this.advancements.stream()
-                                .map(PtaLocks::requirementName)
-                                .collect(Collectors.joining(", "))).getString());
+                        String.join(", ", requirementNames())).getString());
             }
             this.notice = new MDNoticeBoxComponent(NoticeType.WARNING,
                     List.of(new MDTextComponent(text.toString())));
         }
         return this.notice;
+    }
+
+    /**
+     * What to call each requirement: the name the achievement screen shows, or — for an advancement
+     * the client was never told about — the name the book itself wrote into the document.
+     */
+    private List<String> requirementNames() {
+        List<String> named = new ArrayList<>(this.advancements.size());
+        for (int index = 0; index < this.advancements.size(); index++) {
+            String advancement = this.advancements.get(index);
+            String name = PtaLocks.requirementName(advancement);
+            if (name.equals(advancement) && index < this.names.size()) {
+                name = this.names.get(index);
+            }
+            named.add(name);
+        }
+        return named;
     }
 
     private static String translate(String key) {
@@ -170,13 +203,26 @@ public class MDLockedComponent extends MDComponent {
         }
         Minecraft minecraft = context.minecraft();
         int width = Math.max(0, context.maxX());
+        PoseStack pose = context.graphics().pose();
         int top = 0;
-        for (MDComponent block : this.body) {
-            // The offset is what places the block; the pose is left alone, exactly as the guide
-            // screen's own loop does.
-            block.render(context.child(width, Integer.MAX_VALUE, context.mouseX(), context.mouseY(),
-                    context.offsetX(), context.offsetY() + top, context.scale()));
-            top += heightOf(minecraft, block, width) + BLOCK_GAP;
+        pose.pushPose();
+        try {
+            for (MDComponent block : this.body) {
+                // A block is placed by the pose, not by its offset: components draw at the origin
+                // of whatever pose they are handed, and the guide screen only advances the pose
+                // between blocks. The offset and the mouse are still the block's own, though —
+                // they are what hit tests, tooltips and scissors are measured against.
+                pose.pushPose();
+                block.render(context.child(width, Integer.MAX_VALUE, context.mouseX(),
+                        context.mouseY() - top, context.offsetX(), context.offsetY() + top,
+                        context.scale()));
+                pose.popPose();
+                int step = heightOf(minecraft, block, width) + BLOCK_GAP;
+                pose.translate(0, step, 0);
+                top += step;
+            }
+        } finally {
+            pose.popPose();
         }
     }
 

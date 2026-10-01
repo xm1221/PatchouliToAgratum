@@ -10,6 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -32,11 +34,13 @@ class BookLockTest {
     /** The gate's opening tag, as the client component reads it. */
     private static final String GATE = "<pta:locked ";
 
-    /**
-     * A book with one chapter whose entries are all locked, one with a single unlocked entry, a
-     * nested chapter, and an empty one.
-     */
+    /** A book with one chapter whose entries are all locked, one with a single unlocked entry, a
+     * nested chapter, and an empty one. */
     private static BookConverter.Output convertDemo() {
+        return convertDemo(Map.of());
+    }
+
+    private static BookConverter.Output convertDemo(Map<String, String> lang) {
         Map<String, String> files = new LinkedHashMap<>();
         files.put("data/demo/patchouli_books/demo/book.json", "{ name: \"Demo\" }");
         files.put("assets/demo/patchouli_books/demo/en_us/categories/locked.json",
@@ -69,14 +73,27 @@ class BookLockTest {
                         + " advancement: \"minecraft:story/root\", pages: [] }");
 
         BookLayout layout = BookLayout.load(BookSource.of(files), "demo", "demo", "en_us");
-        return BookConverter.convert(layout, Map.of());
+        return BookConverter.convert(layout, lang);
+    }
+
+    /** The value of one attribute of the document's gate. */
+    private static String attribute(String document, String name) {
+        Matcher matcher = Pattern.compile(GATE + "[^>]*\\b" + name + "=\"([^\"]*)\"").matcher(document);
+        assertTrue(matcher.find(), name + " is missing from " + document);
+        return matcher.group(1);
+    }
+
+    /** The {@code pta_lock} line the front matter carries, or {@code null} when it carries none. */
+    private static String declaredLock(String document) {
+        Matcher matcher = Pattern.compile("^pta_lock: \"(.*)\"$", Pattern.MULTILINE).matcher(document);
+        return matcher.find() ? matcher.group(1) : null;
     }
 
     @Test
     void locksAnEntryBehindItsOwnAdvancement() {
         String document = convertDemo().documents().get("locked/a");
 
-        assertTrue(document.contains(GATE + "advancements=\"minecraft:story/root\">"), document);
+        assertEquals("minecraft:story/root", attribute(document, "advancements"));
         assertTrue(document.endsWith("</pta:locked>\n"), document);
         // The title is inside the gate: a reader who has not unlocked it sees the notice, not the
         // entry's heading and prose.
@@ -85,6 +102,36 @@ class BookLockTest {
         // The front matter stays outside the gate, so the sidebar still has a title to show.
         assertTrue(document.startsWith("---\n"), document);
         assertTrue(document.indexOf("---\n\n") < document.indexOf(GATE), document);
+    }
+
+    /**
+     * The requirement is written as the achievement's name — for the reader of the file, and for the
+     * notice, which says it when the client cannot name an advancement it has never seen.
+     */
+    @Test
+    void namesTheRequirementTheWayTheAdvancementScreenDoes() {
+        Map<String, String> documents = convertDemo(Map.of(
+                "advancements.minecraft.story.root.title", "Stone Age",
+                "advancement.minecraft:story/mine_stone", "Stone Age")).documents();
+
+        String entry = documents.get("locked/a");
+        assertEquals("Stone Age", declaredLock(entry));
+        assertEquals("Stone Age", attribute(entry, "names"));
+        // The id is what the client checks, so it stays.
+        assertEquals("minecraft:story/root", attribute(entry, "advancements"));
+
+        // A chapter names every requirement it waits for, in the order it lists them.
+        assertEquals("Stone Age|Stone Age",
+                attribute(documents.get("locked/index"), "names"));
+    }
+
+    /** Without a name to use, the id is still the exact truth about what is waited for. */
+    @Test
+    void fallsBackToTheIdWhenTheBookNeverNamesAnAdvancement() {
+        String document = convertDemo().documents().get("locked/a");
+
+        assertEquals("minecraft:story/root", declaredLock(document));
+        assertEquals("minecraft:story/root", attribute(document, "names"));
     }
 
     @Test
@@ -108,9 +155,9 @@ class BookLockTest {
         Map<String, String> documents = convertDemo().documents();
 
         String locked = documents.get("locked/index");
-        assertTrue(locked.contains(GATE
-                        + "advancements=\"minecraft:story/root,minecraft:story/mine_stone\" unlock=\"any\">"),
-                locked);
+        assertEquals("minecraft:story/root,minecraft:story/mine_stone",
+                attribute(locked, "advancements"));
+        assertEquals("any", attribute(locked, "unlock"));
         // The chapter's list of entries is inside the gate, so a locked chapter does not reveal
         // which entries it holds — which is what Patchouli hides for a locked chapter.
         assertTrue(locked.indexOf(GATE) < locked.indexOf("](a)"), locked);
@@ -126,7 +173,8 @@ class BookLockTest {
         Map<String, String> documents = convertDemo().documents();
 
         String parent = documents.get("nested/index");
-        assertTrue(parent.contains(GATE + "advancements=\"minecraft:story/root\" unlock=\"any\">"), parent);
+        assertEquals("minecraft:story/root", attribute(parent, "advancements"));
+        assertEquals("any", attribute(parent, "unlock"));
         // A nested chapter's index is folded into its parent's directory, which is the only level
         // Ageratum's sidebar reaches.
         assertTrue(documents.get("nested/child__index").contains(GATE),
@@ -161,7 +209,7 @@ class BookLockTest {
             String path = document.getKey();
             String text = document.getValue();
             boolean gated = text.contains(GATE);
-            boolean declared = text.contains("\npta_lock: \"");
+            boolean declared = declaredLock(text) != null;
             boolean chapterIndex = path.endsWith("index") && !path.equals(BookConverter.ROOT_DOCUMENT);
 
             if (!gated) {
@@ -172,9 +220,15 @@ class BookLockTest {
             if (chapterIndex) {
                 gatedChapters++;
                 assertTrue(text.contains("unlock=\"any\""), path + " locks a chapter on one entry");
+                assertFalse(attribute(text, "names").contains(":"),
+                        path + " names its requirements by id: " + attribute(text, "names"));
             } else {
                 gatedEntries++;
                 assertTrue(declared, path + " is locked without a declared advancement");
+                // The book names every advancement it locks on, so a reader is told what a page
+                // waits for by name rather than by id.
+                assertFalse(declaredLock(text).contains(":"),
+                        path + " declares its lock as an id: " + declaredLock(text));
             }
         }
 

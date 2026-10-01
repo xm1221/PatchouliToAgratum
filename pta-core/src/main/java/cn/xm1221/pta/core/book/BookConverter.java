@@ -166,7 +166,7 @@ public final class BookConverter {
 
         StringBuilder out = new StringBuilder();
         out.append(frontMatter(name, null, category.secret(), chapterWeight(category)));
-        out.append(chapterLock(layout, category, document.toString()));
+        out.append(chapterLock(layout, category, lang, document.toString()));
         return out.toString();
     }
 
@@ -178,7 +178,8 @@ public final class BookConverter {
      * The list is the chapter's whole contents, so the lock also hides which entries it holds, which
      * is exactly what Patchouli does not show for a locked chapter.</p>
      */
-    private static String chapterLock(BookLayout layout, BookLayout.Category category, String document) {
+    private static String chapterLock(BookLayout layout, BookLayout.Category category,
+                                      Map<String, String> lang, String document) {
         if (!layout.isCategoryLocked(category.id())) {
             return document;
         }
@@ -188,7 +189,47 @@ public final class BookConverter {
             // advancement. Guarded anyway, because an empty requirement would lock forever.
             return document;
         }
-        return locked(String.join(",", advancements), true, category.secret(), document);
+        return locked(String.join(",", advancements), names(lang, advancements), true,
+                category.secret(), document);
+    }
+
+    /** The names of a list of advancements, in the same order, for readers and for the notice. */
+    private static String names(Map<String, String> lang, List<String> advancements) {
+        List<String> names = new ArrayList<>(advancements.size());
+        for (String advancement : advancements) {
+            names.add(advancementName(lang, advancement));
+        }
+        return String.join("|", names);
+    }
+
+    /**
+     * How an advancement reads: the name its own language file gives it.
+     *
+     * <p>A mod names an advancement however its author liked, so a few conventions are tried before
+     * giving up and keeping the id — which is still the exact thing the lock waits for, and is what
+     * Patchouli itself would have shown. HexMod writes the id straight into the key
+     * ({@code advancement.hexcasting:root}), vanilla nests it ({@code advancements.story.root.title}).</p>
+     */
+    private static String advancementName(Map<String, String> lang, String advancement) {
+        String id = advancement.trim();
+        int colon = id.indexOf(':');
+        if (colon > 0) {
+            String namespace = id.substring(0, colon);
+            String path = id.substring(colon + 1).replace('/', '.');
+            for (String key : List.of(
+                    "advancement." + id,
+                    "advancement." + id + ".title",
+                    "advancements." + namespace + "." + path + ".title",
+                    "advancements." + path + ".title",
+                    "advancements." + namespace + "." + path,
+                    "advancements." + path)) {
+                String name = lang.get(key);
+                if (name != null && !name.isBlank()) {
+                    return name.trim();
+                }
+            }
+        }
+        return id;
     }
 
     private static String categoryTitle(BookLayout layout, BookLayout.Category category,
@@ -222,8 +263,13 @@ public final class BookConverter {
         }
 
         StringBuilder out = new StringBuilder();
-        out.append(frontMatter(name, entry.advancement(), entry.secret(), null));
-        out.append(entryLock(entry, document(name, body)));
+        String requirement = entry.advancement();
+        // What the reader is told the page waits for is the achievement's name; the id itself stays
+        // in the gate below, which is what the client checks.
+        out.append(frontMatter(name,
+                requirement == null || requirement.isBlank() ? null : advancementName(lang, requirement),
+                entry.secret(), null));
+        out.append(entryLock(entry, lang, document(name, body)));
         return out.toString();
     }
 
@@ -238,11 +284,12 @@ public final class BookConverter {
     }
 
     /** Locks an entry's body behind the advancement the book declared for it. */
-    private static String entryLock(BookLayout.Entry entry, String document) {
+    private static String entryLock(BookLayout.Entry entry, Map<String, String> lang, String document) {
         if (!BookLayout.isEntryLocked(entry)) {
             return document;
         }
-        return locked(entry.advancement().trim(), false, entry.secret(), document);
+        String requirement = entry.advancement().trim();
+        return locked(requirement, names(lang, List.of(requirement)), false, entry.secret(), document);
     }
 
     /**
@@ -253,17 +300,22 @@ public final class BookConverter {
      * {@code <pta:locked>} — an Ageratum component this mod contributes — then draws either the body
      * or a notice saying it is not unlocked yet.</p>
      *
-     * <p>The front matter keeps {@code pta_lock} as well, so an exported or inspected document says
-     * what it is waiting for; the component is what actually enforces it.</p>
+     * <p>The requirement travels twice: as ids, which are what the client checks, and as the names
+     * the book's own language file gives those achievements, which is what the notice says when the
+     * client cannot name an advancement it has never seen.</p>
      *
      * @param advancements the advancement ids that unlock the body, comma separated
+     * @param names        those advancements' names, in the same order, {@code |} separated
      * @param unlockAny    whether any one of them is enough, as a locked chapter needs
      * @param secret       whether the requirement itself is a secret, as Patchouli treats it
      */
-    private static String locked(String advancements, boolean unlockAny, boolean secret,
+    private static String locked(String advancements, String names, boolean unlockAny, boolean secret,
                                  String document) {
         StringBuilder out = new StringBuilder();
         out.append("<pta:locked advancements=\"").append(attribute(advancements)).append('"');
+        if (!names.isBlank()) {
+            out.append(" names=\"").append(attribute(names)).append('"');
+        }
         if (unlockAny) {
             out.append(" unlock=\"any\"");
         }
@@ -342,15 +394,16 @@ public final class BookConverter {
      * guide respond to the player holding an item, which is behaviour the original book does not
      * have, and a converted book should not gain features its source never had.</p>
      *
-     * @param weight sidebar ordering, or {@code null} to leave the document at the default
+     * @param lockName what the page waits for, named the way the achievement screen names it, or
+     *                 {@code null} when the page is not locked
+     * @param weight   sidebar ordering, or {@code null} to leave the document at the default
      */
-    private static String frontMatter(String title, String advancement, boolean secret,
-                                      Integer weight) {
+    private static String frontMatter(String title, String lockName, boolean secret, Integer weight) {
         StringBuilder out = new StringBuilder();
         out.append("---\n");
         out.append("title: \"").append(escapeYaml(title)).append("\"\n");
-        if (advancement != null && !advancement.isBlank()) {
-            out.append("pta_lock: \"").append(escapeYaml(advancement)).append("\"\n");
+        if (lockName != null && !lockName.isBlank()) {
+            out.append("pta_lock: \"").append(escapeYaml(lockName)).append("\"\n");
         }
         if (secret) {
             out.append("pta_secret: true\n");

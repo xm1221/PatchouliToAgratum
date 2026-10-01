@@ -54,10 +54,15 @@ public final class Json5 {
     }
 
     /**
-     * Parses a document and flattens it into the dotted-key form Minecraft uses at runtime.
+     * Parses a document and flattens it into the flat-key form the built jar holds.
      *
-     * <p>{@code {"a": {"b": {"c": "x"}}}} becomes {@code a.b.c=x}, which is the form produced
-     * by flattening the nested source file the way a Gradle lang task would.</p>
+     * <p>{@code {"a": {"b": {"c": "x"}}}} becomes {@code a.b.c=x}. A key that already ends in a
+     * separator keeps it instead of gaining a second one, which is what these files rely on: a
+     * namespace, and the folder part of a path, are written as nodes of their own so that the keys
+     * land on them directly —
+     * {@code "advancement.hexcasting:": {"lore/": {"root": {"": "Hexcasting Research"}}}} has to
+     * become {@code advancement.hexcasting:lore/root}, the exact key HexMod's advancements ask for
+     * in the built jar, not {@code advancement.hexcasting:lore/.root}.</p>
      */
     public static Map<String, String> flatten(String text) {
         Map<String, String> out = new LinkedHashMap<>();
@@ -78,6 +83,12 @@ public final class Json5 {
                     path = prefix;
                 } else if (prefix.isEmpty()) {
                     path = key;
+                } else if (prefix.endsWith(":") || prefix.endsWith(".") || prefix.endsWith("/")) {
+                    // The parent ended in a separator on purpose; adding another would produce a
+                    // key nothing ever asks for. These files write a namespace, and the folder part
+                    // of a path, as nodes of their own: `"advancement.hexcasting:"` and `"lore/"`
+                    // together give `advancement.hexcasting:lore/cardamom1`.
+                    path = prefix + key;
                 } else {
                     path = prefix + "." + key;
                 }

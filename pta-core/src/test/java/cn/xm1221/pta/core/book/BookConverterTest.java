@@ -90,7 +90,10 @@ class BookConverterTest {
         String amethyst = output.documents().get("items/amethyst");
         assertNotNull(amethyst);
         assertTrue(amethyst.contains("title: \"Amethyst\""), amethyst);
-        assertTrue(amethyst.contains("pta_lock: \"hexcasting:root\""), amethyst);
+        // What the page waits for is written the way the achievement screen names it; the id it is
+        // checked against stays in the gate, which the client reads.
+        assertTrue(amethyst.contains("pta_lock: \"Hexcasting Research\""), amethyst);
+        assertTrue(amethyst.contains("advancements=\"hexcasting:root\""), amethyst);
         // The entry icon is not turned into an item binding: that would make the guide react to
         // the player holding the item, which the book it came from does not do.
         assertFalse(frontMatterOf(amethyst).contains("items:"), amethyst);

@@ -45,6 +45,14 @@ class Json5Test {
         assertNotNull(media, "hexcasting.page.media.1 is missing");
         assertTrue(media.contains("$(br2)"), "markup lost: " + media);
         assertTrue(media.startsWith("_Media is a form of mental energy"), media);
+
+        // The one nested node in this file is the advancement names, and the locks in the book
+        // read them to say what a page is waiting for. HexMod writes the namespace as its own
+        // node, so the keys must land on it directly rather than gaining a second separator.
+        assertEquals("Hexcasting Research", flat.get("advancement.hexcasting:root"));
+        assertNotNull(flat.get("advancement.hexcasting:root.desc"),
+                "advancement.hexcasting:root.desc is missing");
+        assertEquals("Cardamom Steles #1", flat.get("advancement.hexcasting:lore/cardamom1"));
     }
 
     @Test
@@ -59,6 +67,28 @@ class Json5Test {
         assertEquals("3", flat.get("a.b.n"));
         assertEquals("one", flat.get("list.0"));
         assertEquals("two", flat.get("list.1"));
+    }
+
+    /**
+     * A parent that already ends in a separator keeps it: {@code "advancement.hexcasting:"} plus
+     * {@code root} is {@code advancement.hexcasting:root}, never {@code ...hexcasting:.root}, and
+     * {@code "lore/"} plus {@code cardamom1} keeps its slash.
+     */
+    @Test
+    void doesNotDoubleASeparatorAParentAlreadyEndsWith() {
+        Map<String, String> flat = Json5.flatten("""
+                {
+                  "advancement.hexcasting:": {
+                    "root": { "": "Hexcasting Research", "desc": "..." },
+                    "lore/": { "cardamom1": { "": "Cardamom Steles #1" } }
+                  },
+                  "trailing.": { "leaf": "x" }
+                }
+                """);
+        assertEquals("Hexcasting Research", flat.get("advancement.hexcasting:root"));
+        assertEquals("...", flat.get("advancement.hexcasting:root.desc"));
+        assertEquals("Cardamom Steles #1", flat.get("advancement.hexcasting:lore/cardamom1"));
+        assertEquals("x", flat.get("trailing.leaf"));
     }
 
     /**
