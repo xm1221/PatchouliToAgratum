@@ -3,8 +3,8 @@
 English | [简体中文](README_zh_CN.md)
 
 **Every Patchouli book installed becomes a real Ageratum guide.** The guides are generated in memory
-while the game starts: nothing is written to disk, no resource reload is needed, and a book that a
-pack adds later takes no work at all.
+during each resource reload, from the books exactly as the loaded packs present them: nothing is
+written to disk, and a book a pack adds later takes no work at all.
 
 Its first target is Hex Casting's own book, but the converter itself is generic: any Patchouli book
 can be mirrored. The result is a standalone add-on mod, permanently decoupled from Hex Casting — it
@@ -21,6 +21,9 @@ does not patch Hex Casting, does not build against it, and does not reference it
 
 * **Every Patchouli book, mirrored.** No whitelist and no per-book setup: whatever books the pack has
   are converted, and `exclude.mods` is the only switch — a blacklist.
+* **A book is whatever the packs make it.** Content is read through the resource manager, the way
+  Patchouli reads it, so chapters that another mod (or a resource pack) adds to someone else's book
+  are part of that book — and every resource reload regenerates the guides from scratch.
 * **Prose that is still prose.** `patchouli:text` and `link` pages become native Markdown, so the
   text is selectable and searchable and its links navigate. `$(...)` macros, glyphs and `$(l:…)` links
   keep working, and the book's language files are read as they really are (JSON5 comments, unquoted
@@ -118,12 +121,13 @@ sides. (A per-world server config could not do this — it does not exist yet wh
 registered.)
 
 > An excluded mod's book is logged and skipped, so "why is that book missing" is answerable.
-> Configuration changes take effect on the **next start**: guides are generated while the game
-> assembles its resource packs.
-> Books are found in mods' own files, at `data/<namespace>/patchouli_books/<book>/`, because the
-> guides are generated while the game assembles its resource packs — before Patchouli's own book
-> list exists. A book that lives only in a datapack is therefore not found, and never was: the
-> guide is generated from the book's files, not from Patchouli's loaded copy.
+> Configuration changes take effect on the **next resource reload** (F3+T, or loading a world):
+> the guides are generated while the packs are being reloaded.
+> A book is *declared* by its own mod's `data/<namespace>/patchouli_books/<book>/book.json`, but its
+> *content* is read through the resource manager, exactly as Patchouli reads it — so chapters that
+> other packs add to `assets/<namespace>/patchouli_books/<book>/` belong to the same book, and a
+> resource pack can override a page. A book whose `book.json` exists only inside a datapack is not
+> found, because Patchouli does not find it either: it looks for books in mods' own files.
 > `pta:spike` is a small practice book that ships with this mod, for exercising the mirroring
 > pipeline without installing anything else; it is mirrored like any other book, so exclude `pta`
 > to hide it.

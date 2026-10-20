@@ -14,14 +14,11 @@ import java.util.stream.Stream;
 /**
  * Reads book files straight out of the mods that own them.
  *
- * <p>Two reasons not to go through the resource manager:</p>
- * <ul>
- *   <li>{@code book.json} lives under {@code data/}, and a client resource manager only serves
- *       {@code assets/}. Patchouli reads from the mod file for the same reason.</li>
- *   <li>The generated documents have to be produced <i>before</i> the resource manager exists,
- *       because they are served by a resource pack. Reading mod files directly removes that
- *       ordering problem entirely.</li>
- * </ul>
+ * <p>This is the {@code data/} half of a book. {@code book.json} lives under {@code data/}, and a
+ * client resource manager only serves {@code assets/}, so that file has to come from the mod's own
+ * file — Patchouli reads it the same way. Everything under {@code assets/} is read through the
+ * resource manager instead ({@link ResourceManagerBookSource}), because that is the merged view
+ * every pack contributes to.</p>
  *
  * <p>Paths are relative to the mod file's root, so both a jar (production, and mods dropped into
  * {@code run/mods}) and a directory (a mod under development) work through the same code:</p>
@@ -69,6 +66,14 @@ public final class ModFileBookSource implements BookSource {
         } catch (IOException exception) {
             return List.of();
         }
+        result.sort(String::compareTo);
+        return result;
+    }
+
+    @Override
+    public List<String> namespaces() {
+        List<String> result = new ArrayList<>();
+        ModList.get().getMods().forEach(info -> result.add(info.getModId()));
         result.sort(String::compareTo);
         return result;
     }

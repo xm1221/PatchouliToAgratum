@@ -29,9 +29,19 @@ import java.util.TreeSet;
  * point?" question by asking the manager directly, so a cache-only injection leaves the command
  * reporting "Guide file not found" while every document loaded perfectly.</p>
  *
- * <p>The documents are generated in the constructor, so each time the pack repository is rebuilt
- * for a reload the content is regenerated from the installed books. A new instance is created per
- * open, so nothing goes stale.</p>
+ * <p>The documents are generated on the first content query, not when the pack is opened. That is
+ * deliberate, for two reasons:</p>
+ * <ul>
+ *   <li>Only then does the resource manager hold the new pack stack — during a reload it is
+ *       switched before any listener runs — so the books are read exactly as that reload installed
+ *       them, other mods' chapters included.</li>
+ *   <li>Opening the pack is not the same as reading it: the resource pack screen opens every pack
+ *       to draw its description, and generating a whole book there would be a stall with no
+ *       result.</li>
+ * </ul>
+ *
+ * <p>A new instance is created per reload, so the content is regenerated every time the resource
+ * packs are reloaded.</p>
  */
 public final class PtaGuidePack implements PackResources {
     public static final String PACK_ID = "pta_mirrored_guides";
@@ -43,25 +53,63 @@ public final class PtaGuidePack implements PackResources {
             Optional.empty()
     );
 
-    private final Map<ResourceLocation, String> documents;
+    private volatile Map<ResourceLocation, String> documents;
+
+    /**
+     * True while this thread is generating.
+     *
+     * <p>Generating reads books through the resource manager, and this pack is one of the packs in
+     * that manager — so the manager will ask this pack for its resources while they are still being
+     * built. Answering "nothing" for that one thread is what keeps it from recursing into itself;
+     * other threads simply wait for the lock.</p>
+     */
+    private final ThreadLocal<Boolean> generating = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public PtaGuidePack() {
-        Map<ResourceLocation, String> generated;
-        try {
-            generated = new LinkedHashMap<>(PtaGuideDocuments.build());
-        } catch (Throwable throwable) {
-            // A failure here happens while the game is assembling its resource packs, where an
-            // exception would take the whole reload down. Serving nothing is the correct response:
-            // the guide simply is not mirrored this time.
-            LogUtils.getLogger().error("[pta] could not generate the mirrored guides", throwable);
-            generated = Map.of();
+    }
+
+    /**
+     * The documents, generated once per pack instance.
+     *
+     * <p>Built under a lock because the reload reads packs from worker threads, and the first query
+     * can come from any of them.</p>
+     */
+    private Map<ResourceLocation, String> built() {
+        if (Boolean.TRUE.equals(this.generating.get())) {
+            return Map.of();
         }
-        this.documents = generated;
+        Map<ResourceLocation, String> built = this.documents;
+        if (built != null) {
+            return built;
+        }
+        synchronized (this) {
+            built = this.documents;
+            if (built == null) {
+                built = generate();
+                this.documents = built;
+            }
+            return built;
+        }
+    }
+
+    private Map<ResourceLocation, String> generate() {
+        this.generating.set(Boolean.TRUE);
+        try {
+            return new LinkedHashMap<>(PtaGuideDocuments.build());
+        } catch (Throwable throwable) {
+            // This runs inside a resource reload, where an exception would take the whole reload
+            // down. Serving nothing is the correct response: the guide simply is not mirrored this
+            // time.
+            LogUtils.getLogger().error("[pta] could not generate the mirrored guides", throwable);
+            return Map.of();
+        } finally {
+            this.generating.set(Boolean.FALSE);
+        }
     }
 
     /** How many resources this pack is serving, for diagnostics. */
     public int documentCount() {
-        return this.documents.size();
+        return built().size();
     }
 
     @Override
@@ -74,7 +122,7 @@ public final class PtaGuidePack implements PackResources {
         if (type != PackType.CLIENT_RESOURCES) {
             return null;
         }
-        String text = this.documents.get(location);
+        String text = built().get(location);
         return text == null ? null : () -> new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -84,7 +132,7 @@ public final class PtaGuidePack implements PackResources {
             return;
         }
         String prefix = path.endsWith("/") ? path : path + "/";
-        for (Map.Entry<ResourceLocation, String> document : this.documents.entrySet()) {
+        for (Map.Entry<ResourceLocation, String> document : built().entrySet()) {
             ResourceLocation location = document.getKey();
             if (!location.getNamespace().equals(namespace) || !location.getPath().startsWith(prefix)) {
                 continue;
@@ -100,7 +148,7 @@ public final class PtaGuidePack implements PackResources {
             return Set.of();
         }
         Set<String> namespaces = new TreeSet<>();
-        for (ResourceLocation location : this.documents.keySet()) {
+        for (ResourceLocation location : built().keySet()) {
             namespaces.add(location.getNamespace());
         }
         return namespaces;
@@ -123,6 +171,6 @@ public final class PtaGuidePack implements PackResources {
 
     /** A map view for tests and diagnostics. */
     public Map<ResourceLocation, String> documents() {
-        return new LinkedHashMap<>(this.documents);
+        return new LinkedHashMap<>(built());
     }
 }

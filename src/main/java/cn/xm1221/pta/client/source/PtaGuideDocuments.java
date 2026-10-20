@@ -10,9 +10,11 @@ import cn.xm1221.pta.core.report.ConversionReport;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.ResourceManager;
 import org.slf4j.Logger;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -21,11 +23,15 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Generates the Ageratum guide documents for every configured Patchouli book.
+ * Generates the Ageratum guide documents for every Patchouli book that was found.
  *
- * <p>Runs before any resource manager exists, because the results are served by a resource pack.
- * Everything it needs comes from the mod files themselves, so there is no ordering problem and no
- * dependency on the game's resource pipeline.</p>
+ * <p>The books are read through the client's resource manager, which is how Patchouli reads them:
+ * a book's content belongs to the pack stack, not to the mod that declares it, so a second mod
+ * adding chapters to someone else's book is part of the same book. Language keys are merged the
+ * same way, across every namespace, because that is where a contributing pack keeps its text.</p>
+ *
+ * <p>Only {@code book.json} comes from the owning mod's own file — it lives under {@code data/},
+ * which a client resource manager does not serve.</p>
  *
  * <p>Content is read from {@code en_us}; Patchouli does the same, storing page text as language
  * keys rather than duplicating whole entries per language. Only the text lookup differs per output
@@ -58,11 +64,12 @@ public final class PtaGuideDocuments {
     public static Build buildFor(List<ResourceLocation> books) {
         Map<ResourceLocation, String> documents = new LinkedHashMap<>();
         Map<ResourceLocation, String> reports = new LinkedHashMap<>();
-        BookSource source = new ModFileBookSource();
+        BookSource source = currentSource();
+        Map<String, Map<String, String>> languages = new LinkedHashMap<>();
 
         for (ResourceLocation bookId : books) {
             try {
-                mirror(bookId, source, documents, reports);
+                mirror(bookId, source, languages, documents, reports);
             } catch (RuntimeException | IOException exception) {
                 // One broken book must not stop the rest, or break the reload.
                 LOGGER.error("[pta] failed to mirror Patchouli book {}", bookId, exception);
@@ -80,7 +87,23 @@ public final class PtaGuideDocuments {
     public record Build(Map<ResourceLocation, String> documents, Map<ResourceLocation, String> reports) {
     }
 
+    /**
+     * The book files as the game currently sees them.
+     *
+     * <p>During a reload the resource manager has already been switched to the new pack stack
+     * ({@code ReloadableResourceManager.createReload} does that before any listener runs), so a
+     * build that happens while the reload asks for documents reads exactly the books that reload
+     * installed. When there is no manager yet — nothing has been reloaded, or this runs from the
+     * export command before a world exists — the owning mod's own files are the fallback.</p>
+     */
+    private static BookSource currentSource() {
+        Minecraft minecraft = Minecraft.getInstance();
+        ResourceManager resources = minecraft == null ? null : minecraft.getResourceManager();
+        return resources == null ? new ModFileBookSource() : new ResourceManagerBookSource(resources);
+    }
+
     private static void mirror(ResourceLocation bookId, BookSource source,
+                               Map<String, Map<String, String>> languageCache,
                                Map<ResourceLocation, String> out, Map<ResourceLocation, String> reports)
             throws IOException {
         String namespace = bookId.getNamespace();
@@ -92,9 +115,8 @@ public final class PtaGuideDocuments {
         ConversionReport merged = ConversionReport.empty();
         int written = 0;
         for (String language : languages) {
-            String langPath = "assets/" + namespace + "/lang/" + language + ".json";
-            String langText = source.read(langPath);
-            Map<String, String> lang = langText == null ? Map.of() : Json5.flatten(langText);
+            Map<String, String> lang = languageCache.computeIfAbsent(language,
+                    code -> language(source, namespace, code));
 
             BookConverter.Output output = BookConverter.convert(layout, lang, PtaPageRenderers.registry());
             mergeReports(merged, output.report());
@@ -117,8 +139,31 @@ public final class PtaGuideDocuments {
     }
 
     /**
+     * The language keys for one language, merged the way the game merges them: every namespace's
+     * {@code assets/<namespace>/lang/<code>.json}, with the book's own namespace last so a book
+     * always wins its own keys.
+     *
+     * <p>This is not optional. A pack that adds chapters to a book keeps their text in its own
+     * language file, and without the merge those chapters would be drawn as raw keys.</p>
+     */
+    private static Map<String, String> language(BookSource source, String bookNamespace, String code) {
+        Map<String, String> merged = new LinkedHashMap<>();
+        List<String> namespaces = new ArrayList<>(source.namespaces());
+        namespaces.remove(bookNamespace);
+        namespaces.add(bookNamespace);
+
+        for (String namespace : namespaces) {
+            String text = source.read("assets/" + namespace + "/lang/" + code + ".json");
+            if (text != null) {
+                merged.putAll(Json5.flatten(text));
+            }
+        }
+        return merged;
+    }
+
+    /**
      * The languages to write documents for: always {@code en_us}, which Ageratum falls back to,
-     * plus the player's own language when the book ships one.
+     * plus the player's own language when anything in the stack ships text for it.
      */
     private static Set<String> outputLanguages(String namespace, BookSource source) {
         Set<String> languages = new LinkedHashSet<>();
@@ -129,12 +174,25 @@ public final class PtaGuideDocuments {
             String selected = minecraft.getLanguageManager().getSelected();
             if (selected != null && !selected.isBlank()) {
                 String normalized = selected.toLowerCase(Locale.ROOT).replace('-', '_');
-                if (source.read("assets/" + namespace + "/lang/" + normalized + ".json") != null) {
+                if (shipsLanguage(source, namespace, normalized)) {
                     languages.add(normalized);
                 }
             }
         }
         return languages;
+    }
+
+    private static boolean shipsLanguage(BookSource source, String bookNamespace, String code) {
+        if (source.read("assets/" + bookNamespace + "/lang/" + code + ".json") != null) {
+            return true;
+        }
+        for (String namespace : source.namespaces()) {
+            if (!namespace.equals(bookNamespace)
+                    && source.read("assets/" + namespace + "/lang/" + code + ".json") != null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

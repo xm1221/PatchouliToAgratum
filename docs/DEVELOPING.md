@@ -58,3 +58,13 @@ src/main/java/cn/xm1221/pta/
 节点是「自己带分隔符」的写法（`"advancement.hexcasting:"`、`"lore/"`）、原版 `Ingredient` 匹配不了
 组件（多写的 `components` 会被**静默忽略**，要配组件只能用 `neoforge:components`）。每条都在它咬人
 的地方有代码注释，PLAN 里还有更长的踩坑记录。
+
+还有两件关于「导读什么时候生成」的事，改之前必须知道：
+
+* 书的**声明**在 `data/<ns>/patchouli_books/<book>/book.json`（从 mod 文件读，Patchouli 也一样），
+  **内容**在 `assets/<ns>/patchouli_books/<book>/<lang>/`，必须**走资源管理器**读——那是所有资源包
+  合并后的视图，别的 mod 往同一本书里加的章节才看得见。语言文件同理要跨命名空间合并。
+* 生成是**惰性**的（第一次被要内容时才做），因为 `ReloadableResourceManager.createReload` 先把内部
+  包栈换成新的、再跑 listener，只有那之后读到的才是这次重载的书。而且要防自引用：生成时会去查资源
+  管理器，而管理器里就有我们自己的包，它会回头问我们要内容——`PtaGuidePack` 用一个 ThreadLocal
+  在生成期间对自己返回空，否则无限递归。

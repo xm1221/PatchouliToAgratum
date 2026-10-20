@@ -41,6 +41,19 @@ public interface BookSource {
     List<String> list(String directory, String suffix);
 
     /**
+     * Every namespace this source can serve assets for.
+     *
+     * <p>Needed because language files are not the book's property either: a pack that adds
+     * chapters to a book keeps the text keys for them in its own {@code assets/<namespace>/lang/}.
+     * The game merges all of them, so the conversion has to as well.</p>
+     *
+     * @return the namespaces, or an empty list when the source cannot enumerate them
+     */
+    default List<String> namespaces() {
+        return List.of();
+    }
+
+    /**
      * A source backed by an in-memory map, for tests and for wrapping a resource manager.
      */
     static BookSource of(Map<String, String> files) {
@@ -58,6 +71,26 @@ public interface BookSource {
                 for (String path : copy.keySet()) {
                     if (path.startsWith(prefix) && path.endsWith(suffix)) {
                         result.add(path);
+                    }
+                }
+                result.sort(String::compareTo);
+                return result;
+            }
+
+            @Override
+            public List<String> namespaces() {
+                List<String> result = new ArrayList<>();
+                for (String path : copy.keySet()) {
+                    if (!path.startsWith("assets/")) {
+                        continue;
+                    }
+                    int slash = path.indexOf('/', "assets/".length());
+                    if (slash < 0) {
+                        continue;
+                    }
+                    String namespace = path.substring("assets/".length(), slash);
+                    if (!result.contains(namespace)) {
+                        result.add(namespace);
                     }
                 }
                 result.sort(String::compareTo);
@@ -85,6 +118,7 @@ public interface BookSource {
         String assetRoot = "assets/" + namespace + "/" + bookRoot;
         return new DirectoryBookSource(List.of(resourcesRoot), dataRoot + ", " + assetRoot);
     }
+
 
     /**
      * A source backed by several resource directories, read in order.
